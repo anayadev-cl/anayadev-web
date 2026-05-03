@@ -1,0 +1,11 @@
+# Node
+node_modules/
+.DS_Store
+
+# Astro (placeholder para cuando arranque)
+dist/
+.astro/
+
+# Env
+.env
+.env.local
