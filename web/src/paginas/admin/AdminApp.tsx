@@ -3,17 +3,21 @@ import { Marca } from '../../componentes/Marca'
 import { api, getToken, setToken } from '../../lib/api'
 import { Login } from './Login'
 import { PanelAjustes } from './PanelAjustes'
+import { PanelChatbot } from './PanelChatbot'
+import { PanelCompras } from './PanelCompras'
 import { PanelMedios } from './PanelMedios'
 import { PanelMensajes } from './PanelMensajes'
 import { PanelProductos } from './PanelProductos'
 import { PanelSecciones } from './PanelSecciones'
 
-type Pestana = 'secciones' | 'productos' | 'mensajes' | 'ajustes' | 'medios'
+type Pestana = 'secciones' | 'productos' | 'mensajes' | 'compras' | 'chatbot' | 'ajustes' | 'medios'
 
 const PESTANAS: { id: Pestana; etiqueta: string }[] = [
   { id: 'secciones', etiqueta: 'Secciones' },
   { id: 'productos', etiqueta: 'Productos' },
   { id: 'mensajes', etiqueta: 'Mensajes' },
+  { id: 'compras', etiqueta: 'Compras' },
+  { id: 'chatbot', etiqueta: 'Chatbot' },
   { id: 'ajustes', etiqueta: 'Ajustes' },
   { id: 'medios', etiqueta: 'Medios' },
 ]
@@ -109,6 +113,8 @@ export function AdminApp() {
           />
         )}
         {pestana === 'ajustes' && <PanelAjustes />}
+        {pestana === 'compras' && <PanelCompras />}
+        {pestana === 'chatbot' && <PanelChatbot />}
         {pestana === 'medios' && <PanelMedios />}
       </main>
     </div>

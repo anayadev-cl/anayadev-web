@@ -6,9 +6,16 @@ const CLAVES_CONOCIDAS = [
   { clave: 'email_contacto', etiqueta: 'Correo de contacto' },
   { clave: 'whatsapp', etiqueta: 'WhatsApp (con código de país)' },
   { clave: 'instagram', etiqueta: 'Instagram (usuario, sin @)' },
-  { clave: 'linkedin', etiqueta: 'LinkedIn (usuario de la página)' },
-  { clave: 'github', etiqueta: 'GitHub (organización)' },
   { clave: 'footer_eslogan', etiqueta: 'Eslogan del pie de página' },
+  { clave: 'chatbot_fallback', etiqueta: 'Chatbot: respuesta cuando no entiende' },
+  {
+    clave: 'webhook_onboarding_url',
+    etiqueta: 'Webhook de onboarding (URL completa de Calenzia)',
+  },
+  {
+    clave: 'webhook_onboarding_secreto',
+    etiqueta: 'Webhook de onboarding: secreto (X-Webhook-Secret)',
+  },
 ]
 
 export function PanelAjustes() {

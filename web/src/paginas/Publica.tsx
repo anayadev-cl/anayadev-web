@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Chatbot } from '../componentes/Chatbot'
 import { FondoCircuito } from '../componentes/FondoCircuito'
 import { Navegacion } from '../componentes/Navegacion'
 import { PiePagina } from '../componentes/PiePagina'
@@ -43,6 +44,7 @@ export function Publica() {
         ))}
       </main>
       <PiePagina contenido={contenido} />
+      <Chatbot />
     </div>
   )
 }

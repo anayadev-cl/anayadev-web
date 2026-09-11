@@ -1,5 +1,6 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { AdminApp } from './paginas/admin/AdminApp'
+import { PaginaCompra } from './paginas/PaginaCompra'
 import { Publica } from './paginas/Publica'
 
 export function App() {
@@ -7,6 +8,7 @@ export function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Publica />} />
+        <Route path="/comprar" element={<PaginaCompra />} />
         <Route path="/admin/*" element={<AdminApp />} />
         <Route path="*" element={<Publica />} />
       </Routes>

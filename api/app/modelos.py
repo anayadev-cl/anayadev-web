@@ -70,6 +70,62 @@ class MensajeContacto(Base):
     creado_en = Column(DateTime, default=ahora_utc)
 
 
+class RespuestaChatbot(Base):
+    """Regla de respuestas del chatbot: palabras clave → respuesta."""
+
+    __tablename__ = "chatbot_respuestas"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    palabras_clave = Column(Text, default="")
+    respuesta = Column(Text, default="")
+    sugerencias = Column(JSON, default=list)
+    orden = Column(Integer, default=0)
+    activo = Column(Boolean, default=True)
+
+
+class ModuloCheckout(Base):
+    """Módulo contratable en el checkout de compra (espejo del catálogo de Calenzia)."""
+
+    __tablename__ = "checkout_modulos"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    codigo = Column(String(50), unique=True)
+    nombre = Column(String(200))
+    descripcion = Column(Text, default="")
+    precio_mensual_clp = Column(Integer, default=0)
+    permite_limite = Column(Boolean, default=False)
+    activo = Column(Boolean, default=True)
+    orden = Column(Integer, default=0)
+
+
+class RubroCheckout(Base):
+    """Rubro elegible en el checkout (el código debe existir en Calenzia)."""
+
+    __tablename__ = "checkout_rubros"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    codigo = Column(String(50), unique=True)
+    nombre = Column(String(200))
+    activo = Column(Boolean, default=True)
+    orden = Column(Integer, default=0)
+
+
+class Compra(Base):
+    """Solicitud de compra de Calenzia desde el checkout del sitio."""
+
+    __tablename__ = "compras"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    codigo = Column(String(40), unique=True)
+    estado = Column(String(30), default="pendiente_pago")
+    datos = Column(JSON, default=dict)
+    modulos = Column(JSON, default=list)
+    total_clp = Column(Integer, default=0)
+    respuesta_webhook = Column(Text, nullable=True)
+    creado_en = Column(DateTime, default=ahora_utc)
+    actualizado_en = Column(DateTime, default=ahora_utc, onupdate=ahora_utc)
+
+
 class Usuario(Base):
     """Usuario del panel admin (uno solo por defecto)."""
 

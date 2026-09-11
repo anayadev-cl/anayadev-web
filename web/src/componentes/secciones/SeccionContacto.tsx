@@ -17,16 +17,25 @@ export function SeccionContacto({ seccion, ajustes }: SeccionContactoProps) {
   const [nombre, setNombre] = useState('')
   const [correo, setCorreo] = useState('')
   const [mensaje, setMensaje] = useState('')
+  const [motivo, setMotivo] = useState('Probar Calenzia')
   const [estado, setEstado] = useState<'reposo' | 'enviando' | 'enviado' | 'error'>('reposo')
   const [textoError, setTextoError] = useState('')
   const [correoEnviado, setCorreoEnviado] = useState('')
+
+  const MOTIVOS = [
+    'Probar Calenzia',
+    'Comprar Calenzia',
+    'Saber más de Soluzia',
+    'Proponer una idea para la familia ZIA',
+    'Otro tema',
+  ]
 
   async function enviar(evento: React.FormEvent) {
     evento.preventDefault()
     setEstado('enviando')
     setTextoError('')
     try {
-      await api.enviarContacto(nombre, correo, mensaje)
+      await api.enviarContacto(nombre, correo, `Motivo: ${motivo}\n\n${mensaje}`)
       setCorreoEnviado(correo)
       setEstado('enviado')
       setNombre('')
@@ -68,37 +77,47 @@ export function SeccionContacto({ seccion, ajustes }: SeccionContactoProps) {
                 </p>
               )}
 
-              <div className="mt-8 space-y-3">
-                {email && (
-                  <a
-                    href={`mailto:${email}`}
-                    className="inline-flex items-center gap-3 text-sm text-bruma transition-colors hover:text-cian"
-                  >
-                    <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-cian/25 bg-cian/5 text-cian">
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-                        <rect x="3" y="5" width="18" height="14" rx="3" />
-                        <path d="m3 7 9 6 9-6" />
-                      </svg>
-                    </span>
-                    {email}
-                  </a>
-                )}
-                {whatsappLink && (
-                  <a
-                    href={whatsappLink}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-3 text-sm text-bruma transition-colors hover:text-turquesa"
-                  >
-                    <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-turquesa/25 bg-turquesa/5 text-turquesa">
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2c-1.5 0-3-.4-4.3-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.6-6.1c-.3-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1-.2.3-.7.8-.8 1-.1.2-.3.2-.6.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4 0-.5.2-.7l.4-.5c.1-.2.1-.3 0-.5l-.8-1.9c-.2-.5-.4-.4-.6-.4h-.5c-.2 0-.5.1-.7.3-.9.9-1.2 2.1-.6 3.4a11 11 0 0 0 4.2 4.5c1.6.9 2.6 1 3.5.9.6-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.2-1.2-.1-.1-.3-.2-.6-.3z" />
-                      </svg>
-                    </span>
-                    {whatsapp}
-                    <span className="text-xs text-bruma/60">(abre el chat)</span>
-                  </a>
-                )}
+              <div className="mt-8">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-bruma/60">
+                  O escríbenos directo
+                </p>
+                <div className="mt-3 divide-y divide-blanco/8 rounded-2xl border border-blanco/10 bg-abisal/40">
+                  {email && (
+                    <a
+                      href={`mailto:${email}`}
+                      className="flex items-center gap-3 px-4 py-3.5 text-sm text-bruma transition-colors hover:bg-blanco/5 hover:text-cian"
+                    >
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-cian/25 bg-cian/5 text-cian">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="3" y="5" width="18" height="14" rx="3" />
+                          <path d="m3 7 9 6 9-6" />
+                        </svg>
+                      </span>
+                      <span>
+                        <span className="block text-xs text-bruma/60">Correo</span>
+                        <span className="font-medium">{email}</span>
+                      </span>
+                    </a>
+                  )}
+                  {whatsappLink && (
+                    <a
+                      href={whatsappLink}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-3 px-4 py-3.5 text-sm text-bruma transition-colors hover:bg-blanco/5 hover:text-turquesa"
+                    >
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-turquesa/25 bg-turquesa/5 text-turquesa">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2c-1.5 0-3-.4-4.3-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.6-6.1c-.3-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1-.2.3-.7.8-.8 1-.1.2-.3.2-.6.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4 0-.5.2-.7l.4-.5c.1-.2.1-.3 0-.5l-.8-1.9c-.2-.5-.4-.4-.6-.4h-.5c-.2 0-.5.1-.7.3-.9.9-1.2 2.1-.6 3.4a11 11 0 0 0 4.2 4.5c1.6.9 2.6 1 3.5.9.6-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.2-1.2-.1-.1-.3-.2-.6-.3z" />
+                        </svg>
+                      </span>
+                      <span>
+                        <span className="block text-xs text-bruma/60">WhatsApp</span>
+                        <span className="font-medium">{whatsapp} (abre el chat)</span>
+                      </span>
+                    </a>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -125,6 +144,22 @@ export function SeccionContacto({ seccion, ajustes }: SeccionContactoProps) {
                 </div>
               ) : (
                 <form onSubmit={enviar} className="space-y-4">
+                  <label className="block">
+                    <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.14em] text-bruma/70">
+                      ¿Sobre qué quieres conversar?
+                    </span>
+                    <select
+                      className={entrada}
+                      value={motivo}
+                      onChange={(e) => setMotivo(e.target.value)}
+                    >
+                      {MOTIVOS.map((opcion) => (
+                        <option key={opcion} value={opcion}>
+                          {opcion}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <label className="block">
                       <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.14em] text-bruma/70">

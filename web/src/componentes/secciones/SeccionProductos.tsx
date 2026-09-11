@@ -1,4 +1,5 @@
 import type { Producto, Seccion } from '../../lib/tipos'
+import { NombreConZia } from '../../lib/marca'
 
 interface SeccionProductosProps {
   seccion: Seccion
@@ -24,17 +25,6 @@ const ESTADOS: Record<
     clase: 'border-violeta/40 bg-violeta/10 text-violeta',
     punto: 'bg-violeta',
   },
-}
-
-function NombreConZia({ nombre }: { nombre: string }) {
-  const coincidencia = nombre.match(/^(.*)(zia)$/i)
-  if (!coincidencia) return <>{nombre}</>
-  return (
-    <>
-      {coincidencia[1]}
-      <span className="texto-gradiente">{coincidencia[2]}</span>
-    </>
-  )
 }
 
 export function SeccionProductos({ seccion, productos }: SeccionProductosProps) {
@@ -111,16 +101,26 @@ export function SeccionProductos({ seccion, productos }: SeccionProductosProps) 
 
                 <div className="mt-7 flex-1" />
 
-                {producto.estado === 'activo' && producto.url ? (
-                  <a
-                    href={producto.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-violeta via-electrica to-cian px-5 py-2.5 text-sm font-semibold text-blanco transition-all hover:shadow-[0_0_30px_-8px_rgba(0,223,240,0.6)]"
-                  >
-                    Conocer {producto.nombre}
-                    <span>↗</span>
-                  </a>
+                {producto.estado === 'activo' ? (
+                  <div className="flex flex-col gap-2.5">
+                    <a
+                      href="/comprar"
+                      className="inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-violeta via-electrica to-cian px-5 py-2.5 text-sm font-semibold text-blanco transition-all hover:shadow-[0_0_30px_-8px_rgba(0,223,240,0.6)]"
+                    >
+                      Comprar {producto.nombre}
+                      <span>→</span>
+                    </a>
+                    {producto.url && (
+                      <a
+                        href={producto.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center justify-center gap-2 rounded-full border border-blanco/15 px-5 py-2.5 text-sm font-semibold text-bruma transition-colors hover:border-cian/50 hover:text-cian"
+                      >
+                        Conocer {producto.nombre} ↗
+                      </a>
+                    )}
+                  </div>
                 ) : producto.estado === 'en_desarrollo' ? (
                   <span className="inline-flex items-center justify-center gap-2 rounded-full border border-electrica/30 bg-electrica/5 px-5 py-2.5 text-sm font-medium text-electrica">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">

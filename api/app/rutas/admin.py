@@ -7,18 +7,36 @@ from sqlalchemy.orm import Session
 from ..bd import get_sesion
 from ..config import ajustes
 from ..esquemas import (
+    CompraRespuesta,
     LoginPeticion,
     LoginRespuesta,
     MensajeContactoRespuesta,
+    ModuloCheckoutAdmin,
+    ModuloCheckoutGuardar,
     ProductoActualizar,
     ProductoCrear,
     ProductoRespuesta,
+    RespuestaChatbotAdmin,
+    RespuestaChatbotGuardar,
+    RubroCheckoutAdmin,
+    RubroCheckoutGuardar,
     SeccionActualizar,
     SeccionCrear,
     SeccionRespuesta,
 )
-from ..modelos import Ajuste, MensajeContacto, Producto, Seccion, Usuario
+from ..modelos import (
+    Ajuste,
+    Compra,
+    MensajeContacto,
+    ModuloCheckout,
+    Producto,
+    RespuestaChatbot,
+    RubroCheckout,
+    Seccion,
+    Usuario,
+)
 from ..seguridad import admin_actual, crear_token, verificar_clave
+from ..webhook import enviar_webhook_onboarding
 
 router = APIRouter()
 
@@ -241,6 +259,246 @@ def eliminar_mensaje(
     if mensaje is None:
         raise HTTPException(404, "Mensaje inexistente")
     sesion.delete(mensaje)
+    sesion.commit()
+
+
+# --------------------------------------------------------------------- chatbot
+
+
+@router.get("/chatbot", response_model=list[RespuestaChatbotAdmin])
+def listar_chatbot(
+    sesion: Session = Depends(get_sesion), _: Usuario = Depends(admin_actual)
+):
+    return sesion.query(RespuestaChatbot).order_by(RespuestaChatbot.orden, RespuestaChatbot.id).all()
+
+
+@router.post("/chatbot", response_model=RespuestaChatbotAdmin, status_code=201)
+def crear_chatbot(
+    cuerpo: RespuestaChatbotGuardar,
+    sesion: Session = Depends(get_sesion),
+    _: Usuario = Depends(admin_actual),
+):
+    regla = RespuestaChatbot(**cuerpo.model_dump())
+    sesion.add(regla)
+    sesion.commit()
+    sesion.refresh(regla)
+    return regla
+
+
+@router.put("/chatbot/{regla_id}", response_model=RespuestaChatbotAdmin)
+def actualizar_chatbot(
+    regla_id: int,
+    cuerpo: RespuestaChatbotGuardar,
+    sesion: Session = Depends(get_sesion),
+    _: Usuario = Depends(admin_actual),
+):
+    regla = sesion.get(RespuestaChatbot, regla_id)
+    if regla is None:
+        raise HTTPException(404, "Regla inexistente")
+    for campo, valor in cuerpo.model_dump().items():
+        setattr(regla, campo, valor)
+    sesion.commit()
+    sesion.refresh(regla)
+    return regla
+
+
+@router.delete("/chatbot/{regla_id}", status_code=204)
+def eliminar_chatbot(
+    regla_id: int,
+    sesion: Session = Depends(get_sesion),
+    _: Usuario = Depends(admin_actual),
+):
+    regla = sesion.get(RespuestaChatbot, regla_id)
+    if regla is None:
+        raise HTTPException(404, "Regla inexistente")
+    sesion.delete(regla)
+    sesion.commit()
+
+
+# --------------------------------------------------------------------- compras
+
+
+@router.get("/compras", response_model=list[CompraRespuesta])
+def listar_compras(
+    sesion: Session = Depends(get_sesion), _: Usuario = Depends(admin_actual)
+):
+    return sesion.query(Compra).order_by(Compra.creado_en.desc(), Compra.id.desc()).all()
+
+
+@router.get("/compras/{compra_id}", response_model=CompraRespuesta)
+def detalle_compra(
+    compra_id: int,
+    sesion: Session = Depends(get_sesion),
+    _: Usuario = Depends(admin_actual),
+):
+    compra = sesion.get(Compra, compra_id)
+    if compra is None:
+        raise HTTPException(404, "Compra inexistente")
+    return compra
+
+
+@router.post("/compras/{compra_id}/reenviar", response_model=CompraRespuesta)
+def reenviar_compra(
+    compra_id: int,
+    sesion: Session = Depends(get_sesion),
+    _: Usuario = Depends(admin_actual),
+):
+    compra = sesion.get(Compra, compra_id)
+    if compra is None:
+        raise HTTPException(404, "Compra inexistente")
+    estado, respuesta = enviar_webhook_onboarding(compra, sesion)
+    compra.estado = estado
+    compra.respuesta_webhook = respuesta
+    sesion.commit()
+    sesion.refresh(compra)
+    return compra
+
+
+@router.delete("/compras/{compra_id}", status_code=204)
+def eliminar_compra(
+    compra_id: int,
+    sesion: Session = Depends(get_sesion),
+    _: Usuario = Depends(admin_actual),
+):
+    compra = sesion.get(Compra, compra_id)
+    if compra is None:
+        raise HTTPException(404, "Compra inexistente")
+    sesion.delete(compra)
+    sesion.commit()
+
+
+# ------------------------------------------------------- checkout (módulos y rubros)
+
+
+@router.get("/checkout/modulos", response_model=list[ModuloCheckoutAdmin])
+def listar_modulos_checkout(
+    sesion: Session = Depends(get_sesion), _: Usuario = Depends(admin_actual)
+):
+    return (
+        sesion.query(ModuloCheckout)
+        .order_by(ModuloCheckout.orden, ModuloCheckout.id)
+        .all()
+    )
+
+
+@router.post("/checkout/modulos", response_model=ModuloCheckoutAdmin, status_code=201)
+def crear_modulo_checkout(
+    cuerpo: ModuloCheckoutGuardar,
+    sesion: Session = Depends(get_sesion),
+    _: Usuario = Depends(admin_actual),
+):
+    existente = (
+        sesion.query(ModuloCheckout).filter(ModuloCheckout.codigo == cuerpo.codigo).first()
+    )
+    if existente:
+        raise HTTPException(422, "Ya existe un módulo con ese código")
+    modulo = ModuloCheckout(**cuerpo.model_dump())
+    sesion.add(modulo)
+    sesion.commit()
+    sesion.refresh(modulo)
+    return modulo
+
+
+@router.put("/checkout/modulos/{modulo_id}", response_model=ModuloCheckoutAdmin)
+def actualizar_modulo_checkout(
+    modulo_id: int,
+    cuerpo: ModuloCheckoutGuardar,
+    sesion: Session = Depends(get_sesion),
+    _: Usuario = Depends(admin_actual),
+):
+    modulo = sesion.get(ModuloCheckout, modulo_id)
+    if modulo is None:
+        raise HTTPException(404, "Módulo inexistente")
+    if cuerpo.codigo != modulo.codigo:
+        existente = (
+            sesion.query(ModuloCheckout)
+            .filter(ModuloCheckout.codigo == cuerpo.codigo)
+            .first()
+        )
+        if existente:
+            raise HTTPException(422, "Ya existe un módulo con ese código")
+    for campo, valor in cuerpo.model_dump().items():
+        setattr(modulo, campo, valor)
+    sesion.commit()
+    sesion.refresh(modulo)
+    return modulo
+
+
+@router.delete("/checkout/modulos/{modulo_id}", status_code=204)
+def eliminar_modulo_checkout(
+    modulo_id: int,
+    sesion: Session = Depends(get_sesion),
+    _: Usuario = Depends(admin_actual),
+):
+    modulo = sesion.get(ModuloCheckout, modulo_id)
+    if modulo is None:
+        raise HTTPException(404, "Módulo inexistente")
+    sesion.delete(modulo)
+    sesion.commit()
+
+
+@router.get("/checkout/rubros", response_model=list[RubroCheckoutAdmin])
+def listar_rubros_checkout(
+    sesion: Session = Depends(get_sesion), _: Usuario = Depends(admin_actual)
+):
+    return (
+        sesion.query(RubroCheckout).order_by(RubroCheckout.orden, RubroCheckout.id).all()
+    )
+
+
+@router.post("/checkout/rubros", response_model=RubroCheckoutAdmin, status_code=201)
+def crear_rubro_checkout(
+    cuerpo: RubroCheckoutGuardar,
+    sesion: Session = Depends(get_sesion),
+    _: Usuario = Depends(admin_actual),
+):
+    existente = (
+        sesion.query(RubroCheckout).filter(RubroCheckout.codigo == cuerpo.codigo).first()
+    )
+    if existente:
+        raise HTTPException(422, "Ya existe un rubro con ese código")
+    rubro = RubroCheckout(**cuerpo.model_dump())
+    sesion.add(rubro)
+    sesion.commit()
+    sesion.refresh(rubro)
+    return rubro
+
+
+@router.put("/checkout/rubros/{rubro_id}", response_model=RubroCheckoutAdmin)
+def actualizar_rubro_checkout(
+    rubro_id: int,
+    cuerpo: RubroCheckoutGuardar,
+    sesion: Session = Depends(get_sesion),
+    _: Usuario = Depends(admin_actual),
+):
+    rubro = sesion.get(RubroCheckout, rubro_id)
+    if rubro is None:
+        raise HTTPException(404, "Rubro inexistente")
+    if cuerpo.codigo != rubro.codigo:
+        existente = (
+            sesion.query(RubroCheckout)
+            .filter(RubroCheckout.codigo == cuerpo.codigo)
+            .first()
+        )
+        if existente:
+            raise HTTPException(422, "Ya existe un rubro con ese código")
+    for campo, valor in cuerpo.model_dump().items():
+        setattr(rubro, campo, valor)
+    sesion.commit()
+    sesion.refresh(rubro)
+    return rubro
+
+
+@router.delete("/checkout/rubros/{rubro_id}", status_code=204)
+def eliminar_rubro_checkout(
+    rubro_id: int,
+    sesion: Session = Depends(get_sesion),
+    _: Usuario = Depends(admin_actual),
+):
+    rubro = sesion.get(RubroCheckout, rubro_id)
+    if rubro is None:
+        raise HTTPException(404, "Rubro inexistente")
+    sesion.delete(rubro)
     sesion.commit()
 
 

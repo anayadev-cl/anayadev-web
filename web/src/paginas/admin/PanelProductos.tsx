@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../../lib/api'
+import { NombreConZia } from '../../lib/marca'
 import type { Producto } from '../../lib/tipos'
 import { Aviso, Boton, Campo, Switch, entradaClase } from './ui'
 
@@ -104,6 +105,17 @@ export function PanelProductos() {
       await recargar()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error al cambiar visibilidad')
+    }
+  }
+
+  async function cambiarEstado(producto: Producto, estado: Producto['estado']) {
+    setError('')
+    try {
+      await api.productos.actualizar(producto.id, { ...producto, estado })
+      await recargar()
+      setAviso(`"${producto.nombre}" ahora está: ${estado}`)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error al cambiar el estado')
     }
   }
 
@@ -267,13 +279,20 @@ export function PanelProductos() {
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="truncate text-lg font-semibold text-blanco">
-                    {producto.nombre}
+                    <NombreConZia nombre={producto.nombre} />
                   </p>
                   <p className="truncate text-sm text-bruma">{producto.eslogan}</p>
                 </div>
-                <span className="shrink-0 rounded-md border border-cian/25 bg-cian/5 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-cian">
-                  {producto.estado}
-                </span>
+                <select
+                  value={producto.estado}
+                  onChange={(e) => void cambiarEstado(producto, e.target.value as Producto['estado'])}
+                  aria-label={`Estado de ${producto.nombre}`}
+                  className="shrink-0 rounded-md border border-cian/25 bg-abisal px-2 py-1 text-[11px] font-semibold text-cian outline-none"
+                >
+                  <option value="activo">En producción</option>
+                  <option value="en_desarrollo">En desarrollo</option>
+                  <option value="proximamente">Próximamente</option>
+                </select>
               </div>
               <p className="line-clamp-2 text-sm text-bruma">{producto.descripcion}</p>
               <div className="flex items-center justify-between gap-2 border-t border-blanco/8 pt-3">
