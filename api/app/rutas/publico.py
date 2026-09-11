@@ -5,6 +5,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from .. import calenzia as integracion_calenzia
 from ..bd import get_sesion
 from ..correo import enviar_correo_contacto
 from ..esquemas import (
@@ -28,6 +29,27 @@ from ..modelos import (
 from ..webhook import enviar_webhook_onboarding, total_modulos
 
 router = APIRouter()
+
+
+def _url_calenzia(sesion: Session) -> str | None:
+    ajuste = sesion.query(Ajuste).filter(Ajuste.clave == "calenzia_api_url").first()
+    valor = (ajuste.valor if ajuste else "").strip()
+    return valor or None
+
+
+def _rubros_para_checkout(sesion: Session) -> list[dict]:
+    url = _url_calenzia(sesion)
+    if url:
+        rubros = integracion_calenzia.obtener_rubros(url)
+        if rubros:
+            return rubros
+    return [
+        {"codigo": r.codigo, "nombre": r.nombre}
+        for r in sesion.query(RubroCheckout)
+        .filter(RubroCheckout.activo.is_(True))
+        .order_by(RubroCheckout.orden, RubroCheckout.id)
+        .all()
+    ]
 
 
 def _normalizar(texto: str) -> str:
@@ -163,12 +185,7 @@ def catalogo_checkout(sesion: Session = Depends(get_sesion)):
         .order_by(ModuloCheckout.orden, ModuloCheckout.id)
         .all()
     )
-    rubros = (
-        sesion.query(RubroCheckout)
-        .filter(RubroCheckout.activo.is_(True))
-        .order_by(RubroCheckout.orden, RubroCheckout.id)
-        .all()
-    )
+    rubros = _rubros_para_checkout(sesion)
     return {
         "modulos": [
             {
@@ -177,19 +194,40 @@ def catalogo_checkout(sesion: Session = Depends(get_sesion)):
                 "nombre": m.nombre,
                 "descripcion": m.descripcion,
                 "precio_mensual_clp": m.precio_mensual_clp,
-                "permite_limite": m.permite_limite,
+                "limite_estandar": m.limite_estandar,
                 "orden": m.orden,
             }
             for m in modulos
         ],
-        "rubros": [
-            {"id": r.id, "codigo": r.codigo, "nombre": r.nombre, "orden": r.orden}
-            for r in rubros
-        ],
+        "rubros": rubros,
+        "pais": "CL",
     }
 
 
 _PATRON_SLUG = re.compile(r"^[a-z][a-z0-9]*(-[a-z0-9]+)*$")
+
+
+@router.get("/slug-disponible")
+def consultar_slug_disponible(slug: str, sesion: Session = Depends(get_sesion)):
+    candidato = slug.strip().lower()
+    if not _PATRON_SLUG.match(candidato):
+        raise HTTPException(422, "Formato de slug inválido")
+
+    url = _url_calenzia(sesion)
+    if url:
+        disponible = integracion_calenzia.slug_disponible(url, candidato)
+        if disponible is not None:
+            return {"slug": candidato, "disponible": disponible}
+
+    local = (
+        sesion.query(Compra)
+        .filter(
+            Compra.estado.in_(["pendiente_pago", "pagada", "enviada"]),
+        )
+        .all()
+    )
+    ocupado = any((c.datos or {}).get("slug") == candidato for c in local)
+    return {"slug": candidato, "disponible": not ocupado}
 
 
 @router.post("/compras", response_model=CompraRespuesta, status_code=201)
@@ -211,14 +249,17 @@ def crear_compra(cuerpo: CompraPeticion, sesion: Session = Depends(get_sesion)):
     if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", cuerpo.admin_correo.strip()):
         raise HTTPException(422, "El correo del administrador no es válido")
 
-    rubro = (
-        sesion.query(RubroCheckout)
-        .filter(
-            RubroCheckout.codigo == cuerpo.rubro_codigo.strip().lower(),
-            RubroCheckout.activo.is_(True),
-        )
-        .first()
-    )
+    url = _url_calenzia(sesion)
+    if url:
+        disponible = integracion_calenzia.slug_disponible(url, slug)
+        if disponible is False:
+            raise HTTPException(
+                409, "Ese nombre ya está en uso. Prueba con otro parecido."
+            )
+
+    rubro_codigo = cuerpo.rubro_codigo.strip().lower()
+    rubros = _rubros_para_checkout(sesion)
+    rubro = next((r for r in rubros if r["codigo"] == rubro_codigo), None)
     if rubro is None:
         raise HTTPException(422, "El rubro seleccionado no existe")
 
@@ -233,13 +274,12 @@ def crear_compra(cuerpo: CompraPeticion, sesion: Session = Depends(get_sesion)):
         modulo = modulos_existentes.get(seleccion.modulo_codigo)
         if modulo is None:
             raise HTTPException(422, f"El módulo '{seleccion.modulo_codigo}' no existe")
-        limite = seleccion.limite_mensual if modulo.permite_limite else None
         modulos_seleccionados.append(
             {
                 "modulo_codigo": modulo.codigo,
                 "nombre": modulo.nombre,
                 "precio_mensual_clp": modulo.precio_mensual_clp,
-                "limite_mensual": limite,
+                "limite_mensual": modulo.limite_estandar,
             }
         )
 
@@ -250,10 +290,11 @@ def crear_compra(cuerpo: CompraPeticion, sesion: Session = Depends(get_sesion)):
             "slug": slug,
             "nombre_empresa": cuerpo.nombre_empresa.strip(),
             "tipo_entidad": cuerpo.tipo_entidad,
-            "rubro_codigo": rubro.codigo,
-            "rubro_nombre": rubro.nombre,
-            "pais": cuerpo.pais,
-            "timezone": cuerpo.timezone,
+            "rubro_codigo": rubro_codigo,
+            "rubro_nombre": rubro["nombre"],
+            "pais": "CL",
+            "timezone": "America/Santiago",
+            "equipo_personas": (cuerpo.equipo_personas or "").strip() or None,
             "admin_nombre": cuerpo.admin_nombre.strip(),
             "admin_correo": cuerpo.admin_correo.strip(),
             "admin_telefono": (cuerpo.admin_telefono or "").strip() or None,

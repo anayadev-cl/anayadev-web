@@ -111,7 +111,7 @@ class ModuloCheckoutAdmin(BaseModel):
     nombre: str
     descripcion: str
     precio_mensual_clp: int
-    permite_limite: bool
+    limite_estandar: int | None
     activo: bool
     orden: int
 
@@ -121,7 +121,7 @@ class ModuloCheckoutGuardar(BaseModel):
     nombre: str
     descripcion: str = ""
     precio_mensual_clp: int = 0
-    permite_limite: bool = False
+    limite_estandar: int | None = Field(default=None, ge=0)
     activo: bool = True
     orden: int = 0
 
@@ -144,7 +144,6 @@ class RubroCheckoutGuardar(BaseModel):
 
 class ModuloSeleccionadoPeticion(BaseModel):
     modulo_codigo: str
-    limite_mensual: int | None = Field(default=None, ge=0)
 
 
 class CompraPeticion(BaseModel):
@@ -152,8 +151,7 @@ class CompraPeticion(BaseModel):
     nombre_empresa: str
     tipo_entidad: str
     rubro_codigo: str
-    pais: str = "CL"
-    timezone: str = "America/Santiago"
+    equipo_personas: str | None = Field(default=None, max_length=60)
     admin_nombre: str
     admin_correo: str
     admin_telefono: str | None = None

@@ -30,6 +30,7 @@ AJUSTES_INICIALES = {
     ),
     "webhook_onboarding_url": "",
     "webhook_onboarding_secreto": "",
+    "calenzia_api_url": "http://localhost:8000",
 }
 
 SECCIONES_INICIALES = [
@@ -191,7 +192,7 @@ RESPUESTAS_CHATBOT_INICIALES = [
         ),
         "sugerencias": [
             "¿Qué es Calenzia?",
-            "¿Cómo la compro?",
+            "¿Cómo la adquiero?",
             "¿Qué es la familia ZIA?",
             "Hablar con una persona",
         ],
@@ -207,16 +208,16 @@ RESPUESTAS_CHATBOT_INICIALES = [
             "Puedes probar el demo o comprarla para tu negocio desde el botón "
             "«Comprar Calenzia»."
         ),
-        "sugerencias": ["¿Cómo la compro?", "¿Tiene demo?", "¿Qué módulos tiene?"],
+        "sugerencias": ["¿Cómo la adquiero?", "¿Tiene demo?", "¿Qué módulos tiene?"],
         "orden": 1,
     },
     {
-        "palabras_clave": "comprar, compra, compro, pago, pagar, precio, precios, cuanto cuesta, adquirir, valor",
+        "palabras_clave": "comprar, compra, compro, pago, pagar, precio, precios, cuanto cuesta, adquirir, adquiero, valor",
         "respuesta": (
-            "Puedes comprar Calenzia directo desde el sitio: presiona «Comprar "
-            "Calenzia», completa los datos de tu negocio, elige los módulos que "
-            "necesites y finaliza el pago. Al terminar, creamos tu cuenta y te "
-            "llega un correo de acceso."
+            "Puedes adquirir Calenzia directo desde el sitio: presiona «Comprar "
+            "Calenzia», responde unas preguntas sobre tu negocio, elige los "
+            "módulos que necesites y finaliza el pago. Al terminar, creamos tu "
+            "cuenta y te llega un correo de acceso."
         ),
         "sugerencias": ["¿Qué módulos tiene?", "Hablar con una persona"],
         "orden": 2,
@@ -229,7 +230,7 @@ RESPUESTAS_CHATBOT_INICIALES = [
             "inventario, reportes avanzados y más. Cada módulo suma al valor "
             "mensual y puedes empezar solo con lo esencial."
         ),
-        "sugerencias": ["¿Cómo la compro?", "¿Qué es Calenzia?"],
+        "sugerencias": ["¿Cómo la adquiero?", "¿Qué es Calenzia?"],
         "orden": 3,
     },
     {
@@ -238,7 +239,7 @@ RESPUESTAS_CHATBOT_INICIALES = [
             "Claro: puedes recorrer Calenzia con datos de ejemplo en el demo "
             "público en agenda.anayadev.cl/demo, sin registrarte."
         ),
-        "sugerencias": ["¿Cómo la compro?", "¿Qué módulos tiene?"],
+        "sugerencias": ["¿Cómo la adquiero?", "¿Qué módulos tiene?"],
         "orden": 4,
     },
     {
@@ -272,32 +273,32 @@ RESPUESTAS_CHATBOT_INICIALES = [
             "al correo hola@anayadev.cl o por WhatsApp. Te respondemos de "
             "persona a persona."
         ),
-        "sugerencias": ["¿Qué es Calenzia?", "¿Cómo la compro?"],
+        "sugerencias": ["¿Qué es Calenzia?", "¿Cómo la adquiero?"],
         "orden": 7,
     },
     {
         "palabras_clave": "gracias, excelente, perfecto, genial",
         "respuesta": "¡Gracias a ti! Cualquier otra duda, aquí estoy.",
-        "sugerencias": ["¿Cómo la compro?", "¿Qué es la familia ZIA?"],
+        "sugerencias": ["¿Cómo la adquiero?", "¿Qué es la familia ZIA?"],
         "orden": 8,
     },
 ]
 
 MODULOS_CHECKOUT_INICIALES = [
-    ("agenda", "Agenda", "Agenda y calendario de citas para tu equipo.", 0, False),
-    ("agendamiento_publico", "Agendamiento público", "Tus clientes reservan en línea desde tu propia página.", 0, False),
-    ("ia", "Asistente IA", "Agente de IA que agienda, conversa y responde por ti.", 0, True),
-    ("whatsapp", "Recordatorios WhatsApp", "Recordatorios y conversaciones por WhatsApp.", 0, True),
-    ("campanas", "Campañas", "Marketing y comunicaciones masivas a tus clientes.", 0, True),
-    ("presupuestos", "Presupuestos", "Envía presupuestos y haz seguimiento.", 0, False),
-    ("inventario", "Inventario", "Controla productos y stock.", 0, False),
-    ("reportes_avanzados", "Reportes avanzados", "Métricas y reportes del negocio.", 0, False),
-    ("encuestas", "Encuestas", "Encuestas de satisfacción a tus clientes.", 0, False),
-    ("facturacion", "Facturación", "Boletas y documentos de venta.", 0, False),
-    ("fichas_clinicas", "Fichas clínicas", "Registro clínico de tus pacientes.", 0, False),
-    ("portal_familias", "Portal de familias", "Portal para que familias sigan el avance.", 0, False),
-    ("evaluaciones", "Evaluaciones del desarrollo", "Seguimiento y evaluaciones.", 0, False),
-    ("branding_avanzado", "Branding avanzado", "Personaliza la plataforma con tu marca a fondo.", 0, False),
+    ("agenda", "Agenda", "Agenda y calendario de citas para tu equipo.", 0, None),
+    ("agendamiento_publico", "Agendamiento público", "Tus clientes reservan en línea desde tu propia página.", 0, None),
+    ("ia", "Asistente IA", "Agente de IA que agienda, conversa y responde por ti.", 0, 300),
+    ("whatsapp", "Recordatorios WhatsApp", "Recordatorios y conversaciones por WhatsApp.", 0, 500),
+    ("campanas", "Campañas", "Marketing y comunicaciones masivas a tus clientes.", 0, 2000),
+    ("presupuestos", "Presupuestos", "Envía presupuestos y haz seguimiento.", 0, None),
+    ("inventario", "Inventario", "Controla productos y stock.", 0, None),
+    ("reportes_avanzados", "Reportes avanzados", "Métricas y reportes del negocio.", 0, None),
+    ("encuestas", "Encuestas", "Encuestas de satisfacción a tus clientes.", 0, None),
+    ("facturacion", "Facturación", "Boletas y documentos de venta.", 0, None),
+    ("fichas_clinicas", "Fichas clínicas", "Registro clínico de tus pacientes.", 0, None),
+    ("portal_familias", "Portal de familias", "Portal para que familias sigan el avance.", 0, None),
+    ("evaluaciones", "Evaluaciones del desarrollo", "Seguimiento y evaluaciones.", 0, None),
+    ("branding_avanzado", "Branding avanzado", "Personaliza la plataforma con tu marca a fondo.", 0, None),
 ]
 
 RUBROS_CHECKOUT_INICIALES = [
@@ -427,7 +428,7 @@ def _sembrar_chatbot(sesion: Session) -> None:
 def _sembrar_checkout_modulos(sesion: Session) -> None:
     if sesion.query(ModuloCheckout).count() > 0:
         return
-    for orden, (codigo, nombre, descripcion, precio, permite_limite) in enumerate(
+    for orden, (codigo, nombre, descripcion, precio, limite) in enumerate(
         MODULOS_CHECKOUT_INICIALES
     ):
         sesion.add(
@@ -436,7 +437,7 @@ def _sembrar_checkout_modulos(sesion: Session) -> None:
                 nombre=nombre,
                 descripcion=descripcion,
                 precio_mensual_clp=precio,
-                permite_limite=permite_limite,
+                limite_estandar=limite,
                 orden=orden,
             )
         )

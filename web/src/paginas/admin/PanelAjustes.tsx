@@ -16,6 +16,10 @@ const CLAVES_CONOCIDAS = [
     clave: 'webhook_onboarding_secreto',
     etiqueta: 'Webhook de onboarding: secreto (X-Webhook-Secret)',
   },
+  {
+    clave: 'calenzia_api_url',
+    etiqueta: 'API de Calenzia (base, ej. https://api.agenda.anayadev.cl)',
+  },
 ]
 
 export function PanelAjustes() {

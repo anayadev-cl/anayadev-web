@@ -2,12 +2,20 @@ import { useEffect, useMemo, useState } from 'react'
 import { FondoCircuito } from '../componentes/FondoCircuito'
 import { Marca } from '../componentes/Marca'
 import { api } from '../lib/api'
-import type { Compra, ModuloCheckout, RubroCheckout } from '../lib/tipos'
+import type { Compra, ModuloCheckout } from '../lib/tipos'
 
-const PASOS = ['Tu negocio', 'Administrador', 'Módulos', 'Pago']
+const PASOS = ['Tu negocio', 'Tu equipo', 'Módulos', 'Pago']
 
 const entrada =
   'w-full rounded-xl border border-blanco/12 bg-abisal/80 px-4 py-3 text-sm text-blanco outline-none transition-colors placeholder:text-bruma/40 focus:border-cian/50 focus:ring-1 focus:ring-cian/30'
+
+const OPCIONES_EQUIPO = [
+  { valor: 'solo_yo', etiqueta: 'Solo yo', ayuda: 'Trabajo por mi cuenta' },
+  { valor: '2_a_5', etiqueta: '2 a 5', ayuda: 'Un equipo pequeño' },
+  { valor: '6_a_15', etiqueta: '6 a 15', ayuda: 'Varios profesionales' },
+  { valor: '16_a_50', etiqueta: '16 a 50', ayuda: 'Un equipo grande' },
+  { valor: 'mas_de_50', etiqueta: 'Más de 50', ayuda: 'Una organización' },
+]
 
 function formatearCLP(valor: number) {
   return new Intl.NumberFormat('es-CL', {
@@ -19,23 +27,23 @@ function formatearCLP(valor: number) {
 
 export function PaginaCompra() {
   const [modulos, setModulos] = useState<ModuloCheckout[]>([])
-  const [rubros, setRubros] = useState<RubroCheckout[]>([])
+  const [rubros, setRubros] = useState<{ codigo: string; nombre: string }[]>([])
   const [cargando, setCargando] = useState(true)
   const [paso, setPaso] = useState(0)
 
   const [nombreEmpresa, setNombreEmpresa] = useState('')
   const [slug, setSlug] = useState('')
   const [slugManual, setSlugManual] = useState(false)
+  const [estadoSlug, setEstadoSlug] = useState<'comprobando' | 'libre' | 'ocupado' | null>(null)
   const [tipoEntidad, setTipoEntidad] = useState('empresa')
   const [rubroCodigo, setRubroCodigo] = useState('')
-  const [pais, setPais] = useState('CL')
-  const [timezone, setTimezone] = useState('America/Santiago')
+  const [equipo, setEquipo] = useState('')
 
   const [adminNombre, setAdminNombre] = useState('')
   const [adminCorreo, setAdminCorreo] = useState('')
   const [adminTelefono, setAdminTelefono] = useState('')
 
-  const [seleccionados, setSeleccionados] = useState<Record<string, number | null>>({})
+  const [seleccionados, setSeleccionados] = useState<Record<string, boolean>>({})
 
   const [enviando, setEnviando] = useState(false)
   const [error, setError] = useState('')
@@ -53,10 +61,25 @@ export function PaginaCompra() {
       .finally(() => setCargando(false))
   }, [])
 
+  useEffect(() => {
+    if (!slug || !slugValido()) {
+      setEstadoSlug(null)
+      return
+    }
+    setEstadoSlug('comprobando')
+    const temporizador = setTimeout(() => {
+      api
+        .slugDisponible(slug)
+        .then((respuesta) => setEstadoSlug(respuesta.disponible ? 'libre' : 'ocupado'))
+        .catch(() => setEstadoSlug(null))
+    }, 500)
+    return () => clearTimeout(temporizador)
+  }, [slug])
+
   const total = useMemo(
     () =>
       modulos
-        .filter((m) => m.codigo in seleccionados)
+        .filter((m) => seleccionados[m.codigo])
         .reduce((suma, m) => suma + (m.precio_mensual_clp || 0), 0),
     [modulos, seleccionados],
   )
@@ -79,7 +102,11 @@ export function PaginaCompra() {
   function puedeAvanzar(): boolean {
     if (paso === 0) {
       return (
-        nombreEmpresa.trim().length > 0 && slugValido() && rubroCodigo.length > 0
+        nombreEmpresa.trim().length > 0 &&
+        slugValido() &&
+        estadoSlug !== 'ocupado' &&
+        rubroCodigo.length > 0 &&
+        equipo.length > 0
       )
     }
     if (paso === 1) {
@@ -100,15 +127,11 @@ export function PaginaCompra() {
         nombre_empresa: nombreEmpresa,
         tipo_entidad: tipoEntidad,
         rubro_codigo: rubroCodigo,
-        pais,
-        timezone,
+        equipo_personas: equipo,
         admin_nombre: adminNombre,
         admin_correo: adminCorreo,
         admin_telefono: adminTelefono || null,
-        modulos: Object.entries(seleccionados).map(([codigo, limite]) => ({
-          modulo_codigo: codigo,
-          limite_mensual: limite,
-        })),
+        modulos: Object.keys(seleccionados).map((codigo) => ({ modulo_codigo: codigo })),
       })
       const pagada = await api.pagarCompra(compra.id)
       setResultado(pagada)
@@ -144,15 +167,16 @@ export function PaginaCompra() {
             )}
           </span>
           <h1 className="mt-6 text-3xl font-bold text-blanco">
-            {exito ? '¡Compra registrada!' : 'Compra registrada, con un detalle'}
+            {exito ? '¡Tu Calenzia viene en camino!' : 'Recibimos todo, con un detalle'}
           </h1>
           <p className="mt-4 text-base leading-relaxed text-bruma">
             {exito
-              ? `Tu pedido quedó registrado con el código ${resultado.codigo.toUpperCase()}. Estamos activando tu cuenta de Calenzia: te enviaremos el acceso al correo ${resultado.datos.admin_correo}.`
+              ? `Tu pedido quedó registrado con el código ${resultado.codigo.toUpperCase()}. Estamos activando tu cuenta: te enviaremos el acceso al correo ${resultado.datos.admin_correo}.`
               : 'Recibimos tu pago y tu pedido quedó guardado, pero la activación automática falló. Nuestro equipo lo activará manualmente y te contactará pronto.'}
           </p>
           <p className="mt-2 text-sm text-bruma/70">
-            Slug de tu negocio: <span className="text-cian">{resultado.datos.slug}</span>
+            Tus clientes te encontrarán en{' '}
+            <span className="text-cian">agenda.anayadev.cl/{resultado.datos.slug}</span>
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <a
@@ -162,11 +186,7 @@ export function PaginaCompra() {
               Volver al inicio
             </a>
             <a
-              href="#contacto"
-              onClick={(e) => {
-                e.preventDefault()
-                window.location.href = '/#contacto'
-              }}
+              href="/#contacto"
               className="rounded-full border border-blanco/15 px-7 py-3 text-sm font-semibold text-bruma transition-colors hover:border-cian/50 hover:text-cian"
             >
               ¿Dudas? Conversemos
@@ -197,14 +217,15 @@ export function PaginaCompra() {
       <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
         <div className="text-center">
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-cian">
-            Checkout
+            Un momento, es rápido
           </p>
           <h1 className="mt-3 text-3xl font-bold text-blanco sm:text-4xl">
-            Comprar <span className="texto-gradiente">Calenzia</span>
+            Vamos a conocernos para dejarte{' '}
+            <span className="texto-gradiente">Calenzia</span> lista
           </h1>
           <p className="mt-3 text-sm leading-relaxed text-bruma">
-            Completa los datos de tu negocio, elige tus módulos y activamos tu
-            agenda inteligente.
+            Unas preguntas y queda funcionando. Por ahora Calenzia está
+            disponible en Chile.
           </p>
         </div>
 
@@ -247,69 +268,26 @@ export function PaginaCompra() {
         ) : (
           <div className="tarjeta-vidrio mt-8 rounded-3xl p-6 sm:p-8">
             {paso === 0 && (
-              <div className="space-y-5">
-                <div>
-                  <h2 className="text-lg font-semibold text-blanco">Cuéntanos de tu negocio</h2>
-                  <p className="mt-1 text-sm text-bruma">
-                    Con estos datos creamos tu espacio en Calenzia.
-                  </p>
-                </div>
-
-                <label className="block">
-                  <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.14em] text-bruma/70">
-                    Nombre del negocio
-                  </span>
-                  <input
-                    className={entrada}
-                    placeholder="Ej. Clínica del Sol"
-                    value={nombreEmpresa}
-                    onChange={(e) => {
-                      setNombreEmpresa(e.target.value)
-                      if (!slugManual) generarSlug(e.target.value)
-                    }}
-                  />
-                </label>
-
-                <label className="block">
-                  <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.14em] text-bruma/70">
-                    Dirección de tu página (slug)
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <span className="shrink-0 text-sm text-bruma/60">agenda.anayadev.cl/</span>
+              <div className="space-y-7">
+                <div className="space-y-5">
+                  <label className="block">
+                    <span className="mb-1.5 block text-lg font-semibold text-blanco">
+                      ¿Cómo se llama tu negocio?
+                    </span>
                     <input
                       className={entrada}
-                      placeholder="clinica-del-sol"
-                      value={slug}
+                      placeholder="Ej. Clínica del Sol"
+                      value={nombreEmpresa}
                       onChange={(e) => {
-                        setSlugManual(true)
-                        setSlug(e.target.value.toLowerCase().replace(/\s+/g, '-'))
+                        setNombreEmpresa(e.target.value)
+                        if (!slugManual) generarSlug(e.target.value)
                       }}
                     />
-                  </div>
-                  {slug && !slugValido() && (
-                    <p className="mt-1.5 text-xs text-red-300">
-                      Solo letras minúsculas, números y guiones intermedios.
-                    </p>
-                  )}
-                </label>
-
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <label className="block">
-                    <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.14em] text-bruma/70">
-                      Tipo de entidad
-                    </span>
-                    <select
-                      className={entrada}
-                      value={tipoEntidad}
-                      onChange={(e) => setTipoEntidad(e.target.value)}
-                    >
-                      <option value="empresa">Empresa</option>
-                      <option value="persona_natural">Persona natural</option>
-                    </select>
                   </label>
+
                   <label className="block">
-                    <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.14em] text-bruma/70">
-                      Rubro
+                    <span className="mb-1.5 block text-lg font-semibold text-blanco">
+                      ¿A qué se dedica?
                     </span>
                     <select
                       className={entrada}
@@ -322,44 +300,110 @@ export function PaginaCompra() {
                         </option>
                       ))}
                     </select>
+                    <span className="mt-1.5 block text-xs text-bruma/60">
+                      Con esto preparamos tu Calenzia para tu rubro.
+                    </span>
                   </label>
-                </div>
 
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <label className="block">
-                    <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.14em] text-bruma/70">
-                      País
+                  <div>
+                    <span className="mb-2 block text-lg font-semibold text-blanco">
+                      ¿Para cuántas personas es?
                     </span>
-                    <select className={entrada} value={pais} onChange={(e) => setPais(e.target.value)}>
-                      <option value="CL">Chile</option>
-                      <option value="PE">Perú</option>
-                      <option value="CO">Colombia</option>
-                      <option value="MX">México</option>
-                      <option value="AR">Argentina</option>
-                    </select>
+                    <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
+                      {OPCIONES_EQUIPO.map((opcion) => (
+                        <button
+                          key={opcion.valor}
+                          type="button"
+                          onClick={() => setEquipo(opcion.valor)}
+                          className={`rounded-2xl border px-3 py-3 text-center transition-all ${
+                            equipo === opcion.valor
+                              ? 'border-cian/60 bg-cian/10 text-cian'
+                              : 'border-blanco/10 bg-abisal/60 text-bruma hover:border-blanco/25'
+                          }`}
+                        >
+                          <span className="block text-sm font-semibold">{opcion.etiqueta}</span>
+                          <span className="mt-0.5 block text-[11px] opacity-70">{opcion.ayuda}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <label className="block">
+                    <span className="mb-1.5 block text-lg font-semibold text-blanco">
+                      ¿Cómo quieres que te encuentren tus clientes?
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="shrink-0 text-sm text-bruma/60">agenda.anayadev.cl/</span>
+                      <input
+                        className={entrada}
+                        placeholder="clinica-del-sol"
+                        value={slug}
+                        onChange={(e) => {
+                          setSlugManual(true)
+                          setSlug(e.target.value.toLowerCase().replace(/\s+/g, '-'))
+                        }}
+                      />
+                    </div>
+                    {slug && slugValido() && (
+                      <span
+                        className={`mt-1.5 block text-xs ${
+                          estadoSlug === 'libre'
+                            ? 'text-turquesa'
+                            : estadoSlug === 'ocupado'
+                              ? 'text-red-300'
+                              : 'text-bruma/60'
+                        }`}
+                      >
+                        {estadoSlug === 'comprobando' && 'Revisando disponibilidad…'}
+                        {estadoSlug === 'libre' && 'Ese nombre está libre ✓'}
+                        {estadoSlug === 'ocupado' && 'Ese nombre ya está en uso. Prueba con otro parecido.'}
+                        {estadoSlug === null && 'El enlace donde tus clientes agendarán contigo.'}
+                      </span>
+                    )}
+                    {slug && !slugValido() && (
+                      <span className="mt-1.5 block text-xs text-red-300">
+                        Solo letras minúsculas, números y guiones intermedios.
+                      </span>
+                    )}
                   </label>
+
                   <label className="block">
-                    <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.14em] text-bruma/70">
-                      Zona horaria
+                    <span className="mb-1.5 block text-lg font-semibold text-blanco">
+                      ¿Eres una empresa o trabajas de forma independiente?
                     </span>
-                    <input
-                      className={entrada}
-                      value={timezone}
-                      onChange={(e) => setTimezone(e.target.value)}
-                    />
+                    <div className="grid grid-cols-2 gap-2.5">
+                      {[
+                        { valor: 'empresa', etiqueta: 'Tengo una empresa' },
+                        { valor: 'persona_natural', etiqueta: 'Trabajo por mi cuenta' },
+                      ].map((opcion) => (
+                        <button
+                          key={opcion.valor}
+                          type="button"
+                          onClick={() => setTipoEntidad(opcion.valor)}
+                          className={`rounded-2xl border px-3 py-3 text-sm font-semibold transition-all ${
+                            tipoEntidad === opcion.valor
+                              ? 'border-cian/60 bg-cian/10 text-cian'
+                              : 'border-blanco/10 bg-abisal/60 text-bruma hover:border-blanco/25'
+                          }`}
+                        >
+                          {opcion.etiqueta}
+                        </button>
+                      ))}
+                    </div>
                   </label>
                 </div>
               </div>
             )}
 
             {paso === 1 && (
-              <div className="space-y-5">
+              <div className="space-y-6">
                 <div>
                   <h2 className="text-lg font-semibold text-blanco">
-                    ¿Quién administrará la cuenta?
+                    ¿Quién estará a cargo de la cuenta?
                   </h2>
                   <p className="mt-1 text-sm text-bruma">
-                    A este correo llegan el acceso y las notificaciones de tu negocio.
+                    Es la persona que administrará la agenda y recibirá el
+                    acceso. Puedes ser tú mismo.
                   </p>
                 </div>
                 <label className="block">
@@ -384,6 +428,9 @@ export function PaginaCompra() {
                     value={adminCorreo}
                     onChange={(e) => setAdminCorreo(e.target.value)}
                   />
+                  <span className="mt-1.5 block text-xs text-bruma/60">
+                    Aquí te enviaremos tu acceso, nada de spam.
+                  </span>
                 </label>
                 <label className="block">
                   <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.14em] text-bruma/70">
@@ -402,14 +449,17 @@ export function PaginaCompra() {
             {paso === 2 && (
               <div className="space-y-4">
                 <div>
-                  <h2 className="text-lg font-semibold text-blanco">Elige tus módulos</h2>
+                  <h2 className="text-lg font-semibold text-blanco">
+                    ¿Qué te gustaría tener desde el día uno?
+                  </h2>
                   <p className="mt-1 text-sm text-bruma">
-                    Empieza con lo esencial y suma más cuando tu negocio crezca.
+                    Elige lo que tu negocio necesita ahora. Puedes sumar más
+                    después, cuando quieras.
                   </p>
                 </div>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   {modulos.map((modulo) => {
-                    const activo = modulo.codigo in seleccionados
+                    const activo = !!seleccionados[modulo.codigo]
                     return (
                       <label
                         key={modulo.codigo}
@@ -430,34 +480,18 @@ export function PaginaCompra() {
                             type="checkbox"
                             className="mt-0.5 h-4 w-4 accent-cyan-400"
                             checked={activo}
-                            onChange={(e) => {
-                              const copia = { ...seleccionados }
-                              if (e.target.checked) copia[modulo.codigo] = null
-                              else delete copia[modulo.codigo]
-                              setSeleccionados(copia)
-                            }}
+                            onChange={(e) =>
+                              setSeleccionados({ ...seleccionados, [modulo.codigo]: e.target.checked })
+                            }
                           />
                         </div>
-                        {activo && modulo.permite_limite && (
-                          <div className="mt-3 flex items-center gap-2">
-                            <span className="text-xs text-bruma">Límite mensual:</span>
-                            <input
-                              type="number"
-                              min={0}
-                              placeholder="Sin límite"
-                              className={`${entrada} !w-28 !px-2.5 !py-1.5 !text-xs`}
-                              value={seleccionados[modulo.codigo] ?? ''}
-                              onChange={(e) =>
-                                setSeleccionados({
-                                  ...seleccionados,
-                                  [modulo.codigo]:
-                                    e.target.value === '' ? null : Number(e.target.value),
-                                })
-                              }
-                            />
-                          </div>
+                        {modulo.limite_estandar != null && (
+                          <p className="mt-2 text-[11px] text-bruma/70">
+                            Incluye {modulo.limite_estandar.toLocaleString('es-CL')} por mes
+                            como estándar.
+                          </p>
                         )}
-                        <p className="mt-2.5 text-xs font-semibold text-cian">
+                        <p className="mt-2 text-xs font-semibold text-cian">
                           {modulo.precio_mensual_clp > 0
                             ? `${formatearCLP(modulo.precio_mensual_clp)} / mes`
                             : 'Incluido por ahora'}
@@ -466,24 +500,37 @@ export function PaginaCompra() {
                     )
                   })}
                 </div>
+                <p className="rounded-xl border border-blanco/10 bg-abisal/60 px-4 py-3 text-xs leading-relaxed text-bruma">
+                  ¿Tu equipo es más grande o necesitas otros límites?{' '}
+                  <a href="/#contacto" className="font-semibold text-cian hover:text-turquesa">
+                    Conversemos y lo armamos contigo
+                  </a>
+                  .
+                </p>
               </div>
             )}
 
             {paso === 3 && (
               <div className="space-y-5">
                 <div>
-                  <h2 className="text-lg font-semibold text-blanco">Revisa y paga</h2>
+                  <h2 className="text-lg font-semibold text-blanco">
+                    Un último vistazo antes de activar
+                  </h2>
                   <p className="mt-1 text-sm text-bruma">
-                    Un último vistazo antes de activar tu Calenzia.
+                    Si algo no calza, puedes volver atrás y ajustarlo.
                   </p>
                 </div>
 
                 <dl className="space-y-2.5 rounded-2xl bg-abisal/60 p-5 text-sm">
                   {[
-                    ['Negocio', nombreEmpresa],
-                    ['Página', `agenda.anayadev.cl/${slug}`],
+                    ['Tu negocio', nombreEmpresa],
                     ['Rubro', rubros.find((r) => r.codigo === rubroCodigo)?.nombre ?? rubroCodigo],
-                    ['Administrador', `${adminNombre} · ${adminCorreo}`],
+                    [
+                      'Equipo',
+                      OPCIONES_EQUIPO.find((o) => o.valor === equipo)?.etiqueta ?? '—',
+                    ],
+                    ['Tu página', `agenda.anayadev.cl/${slug}`],
+                    ['A cargo', `${adminNombre} · ${adminCorreo}`],
                   ].map(([clave, valor]) => (
                     <div key={clave} className="flex justify-between gap-4">
                       <dt className="shrink-0 text-bruma/70">{clave}</dt>
@@ -494,7 +541,7 @@ export function PaginaCompra() {
                     <dt className="text-bruma/70">Módulos</dt>
                     <dd className="text-right text-blanco">
                       {Object.keys(seleccionados).length === 0
-                        ? 'Ninguno (agenda base)'
+                        ? 'La agenda base'
                         : Object.keys(seleccionados)
                             .map((codigo) => modulos.find((m) => m.codigo === codigo)?.nombre ?? codigo)
                             .join(', ')}
@@ -544,12 +591,11 @@ export function PaginaCompra() {
         )}
 
         <p className="mt-6 text-center text-xs text-bruma/60">
-          El pago conecta con la pasarela y activa tu tenant en Calenzia de
-          inmediato. ¿Dudas? Escríbenos a{' '}
+          ¿Tienes dudas antes de pagar? Escríbenos a{' '}
           <a href="mailto:hola@anayadev.cl" className="text-cian hover:text-turquesa">
             hola@anayadev.cl
-          </a>
-          .
+          </a>{' '}
+          o usa el chat de la esquina.
         </p>
       </main>
     </div>

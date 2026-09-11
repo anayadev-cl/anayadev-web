@@ -71,7 +71,7 @@ export interface ModuloCheckout {
   nombre: string
   descripcion: string
   precio_mensual_clp: number
-  permite_limite: boolean
+  limite_estandar: number | null
   activo: boolean
   orden: number
 }
@@ -86,7 +86,6 @@ export interface RubroCheckout {
 
 export interface ModuloSeleccionado {
   modulo_codigo: string
-  limite_mensual: number | null
 }
 
 export interface Compra {
@@ -101,6 +100,7 @@ export interface Compra {
     rubro_nombre: string
     pais: string
     timezone: string
+    equipo_personas: string | null
     admin_nombre: string
     admin_correo: string
     admin_telefono: string | null

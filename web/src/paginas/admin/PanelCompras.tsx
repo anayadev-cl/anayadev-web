@@ -28,7 +28,7 @@ export function PanelCompras() {
     nombre: '',
     descripcion: '',
     precio_mensual_clp: 0,
-    permite_limite: false,
+    limite_estandar: null,
     activo: true,
     orden: 0,
   })
@@ -258,7 +258,7 @@ export function PanelCompras() {
                 nombre: '',
                 descripcion: '',
                 precio_mensual_clp: 0,
-                permite_limite: false,
+                limite_estandar: null,
                 activo: true,
                 orden: modulos.length,
               })
@@ -298,24 +298,30 @@ export function PanelCompras() {
                 />
               </Campo>
             </div>
-            <Campo etiqueta="Descripción">
-              <input
-                className={entradaClase}
-                value={moduloForm.descripcion}
-                onChange={(e) => setModuloForm({ ...moduloForm, descripcion: e.target.value })}
-              />
-            </Campo>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-6">
-                <label className="flex items-center gap-2 text-sm text-bruma">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 accent-cyan-400"
-                    checked={moduloForm.permite_limite}
-                    onChange={(e) => setModuloForm({ ...moduloForm, permite_limite: e.target.checked })}
-                  />
-                  Permite límite mensual
-                </label>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <Campo etiqueta="Descripción">
+                <input
+                  className={entradaClase}
+                  value={moduloForm.descripcion}
+                  onChange={(e) => setModuloForm({ ...moduloForm, descripcion: e.target.value })}
+                />
+              </Campo>
+              <Campo etiqueta="Límite estándar mensual (vacío = sin límite)">
+                <input
+                  type="number"
+                  min={0}
+                  className={entradaClase}
+                  placeholder="Ej. 500"
+                  value={moduloForm.limite_estandar ?? ''}
+                  onChange={(e) =>
+                    setModuloForm({
+                      ...moduloForm,
+                      limite_estandar: e.target.value === '' ? null : Number(e.target.value),
+                    })
+                  }
+                />
+              </Campo>
+              <div className="flex items-end pb-1">
                 <div className="flex items-center gap-3">
                   <Switch
                     activo={moduloForm.activo}
@@ -325,14 +331,14 @@ export function PanelCompras() {
                   <span className="text-sm text-bruma">Activo</span>
                 </div>
               </div>
-              <div className="flex gap-2">
-                <Boton variante="secundario" onClick={() => setModuloEditando(null)}>
-                  Cancelar
-                </Boton>
-                <Boton variante="primario" onClick={guardarModulo}>
-                  Guardar
-                </Boton>
-              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Boton variante="secundario" onClick={() => setModuloEditando(null)}>
+                Cancelar
+              </Boton>
+              <Boton variante="primario" onClick={guardarModulo}>
+                Guardar
+              </Boton>
             </div>
           </div>
         )}
@@ -384,8 +390,9 @@ export function PanelCompras() {
           <div>
             <h2 className="text-xl font-bold text-blanco">Rubros del checkout</h2>
             <p className="mt-1 text-sm text-bruma">
-              El código debe existir en el catálogo de rubros de Calenzia
-              (superadmin → rubros).
+              El checkout toma los rubros en vivo desde la API de Calenzia
+              (ajuste <span className="text-cian">calenzia_api_url</span>); esta
+              lista es el respaldo local por si Calenzia no responde.
             </p>
           </div>
           <Boton

@@ -58,16 +58,21 @@ export const api = {
 
   checkoutCatalogo: async (): Promise<{
     modulos: ModuloCheckout[]
-    rubros: RubroCheckout[]
+    rubros: { codigo: string; nombre: string }[]
+    pais: string
   }> => (await pedir('/api/v1/publico/checkout')).json(),
+
+  slugDisponible: async (
+    slug: string,
+  ): Promise<{ slug: string; disponible: boolean }> =>
+    (await pedir(`/api/v1/publico/slug-disponible?slug=${encodeURIComponent(slug)}`)).json(),
 
   crearCompra: async (cuerpo: {
     slug: string
     nombre_empresa: string
     tipo_entidad: string
     rubro_codigo: string
-    pais?: string
-    timezone?: string
+    equipo_personas?: string | null
     admin_nombre: string
     admin_correo: string
     admin_telefono?: string | null

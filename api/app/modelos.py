@@ -93,7 +93,7 @@ class ModuloCheckout(Base):
     nombre = Column(String(200))
     descripcion = Column(Text, default="")
     precio_mensual_clp = Column(Integer, default=0)
-    permite_limite = Column(Boolean, default=False)
+    limite_estandar = Column(Integer, nullable=True)
     activo = Column(Boolean, default=True)
     orden = Column(Integer, default=0)
 
