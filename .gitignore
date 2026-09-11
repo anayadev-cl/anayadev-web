@@ -1,11 +1,29 @@
-# Node
-node_modules/
-.DS_Store
+# ---- anayadev-web · .gitignore ----
 
-# Astro (placeholder para cuando arranque)
-dist/
-.astro/
-
-# Env
+# Secrets / entorno
 .env
-.env.local
+*.local
+
+# Python / backend
+__pycache__/
+*.py[cod]
+.venv/
+api/data/
+
+# Medios subidos localmente (no versionar binarios)
+api/uploads/*
+!api/uploads/.gitkeep
+
+# Node / frontend
+node_modules/
+web/dist/
+
+# Editores / SO
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*:Zone.Identifier
+
+# Logs
+*.log

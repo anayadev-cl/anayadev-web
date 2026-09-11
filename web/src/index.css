@@ -1,0 +1,110 @@
+@import "tailwindcss";
+
+@theme {
+  --color-noche: #000410;
+  --color-abisal: #050d24;
+  --color-panel: #0a1328;
+  --color-electrica: #087ef5;
+  --color-cian: #00dff0;
+  --color-turquesa: #00d8c8;
+  --color-violeta: #8438f4;
+  --color-intermedia: #385fcb;
+  --color-blanco: #fcfcfc;
+  --color-bruma: #93a7c4;
+
+  --font-marca: "Space Grotesk", "Segoe UI", system-ui, -apple-system, sans-serif;
+
+  --animate-nodo: nodo 4s ease-in-out infinite;
+  --animate-flotar: flotar 7s ease-in-out infinite;
+
+  @keyframes nodo {
+    0%,
+    100% {
+      opacity: 0.35;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+
+  @keyframes flotar {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-10px);
+    }
+  }
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--color-noche);
+  color: var(--color-blanco);
+  font-family: var(--font-marca);
+  overflow-x: hidden;
+}
+
+.texto-gradiente {
+  background: linear-gradient(
+    92deg,
+    #8438f4 0%,
+    #087ef5 42%,
+    #00dff0 78%,
+    #00d8c8 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.fondo-rejilla {
+  background-image: linear-gradient(rgba(8, 126, 245, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(8, 126, 245, 0.06) 1px, transparent 1px);
+  background-size: 46px 46px;
+  mask-image: radial-gradient(ellipse 90% 70% at 50% 30%, black 30%, transparent 75%);
+}
+
+.tarjeta-vidrio {
+  background: rgba(252, 252, 252, 0.03);
+  border: 1px solid rgba(252, 252, 252, 0.08);
+  backdrop-filter: blur(12px);
+}
+
+.resplandor-violeta {
+  box-shadow: 0 0 48px -14px rgba(132, 56, 244, 0.55);
+}
+
+.resplandor-cian {
+  box-shadow: 0 0 48px -14px rgba(0, 223, 240, 0.45);
+}
+
+.anillo-gradiente {
+  border: 1px solid transparent;
+  background:
+    linear-gradient(var(--color-panel), var(--color-panel)) padding-box,
+    linear-gradient(120deg, rgba(132, 56, 244, 0.9), rgba(8, 126, 245, 0.9), rgba(0, 223, 240, 0.9)) border-box;
+}
+
+::selection {
+  background: rgba(0, 223, 240, 0.28);
+  color: #fcfcfc;
+}
+
+::-webkit-scrollbar {
+  width: 9px;
+}
+::-webkit-scrollbar-track {
+  background: #000410;
+}
+::-webkit-scrollbar-thumb {
+  background: #12203c;
+  border-radius: 8px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #1b3057;
+}
