@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { FondoCircuito } from '../componentes/FondoCircuito'
 import { Marca } from '../componentes/Marca'
 import { api } from '../lib/api'
-import type { Compra, ModuloCheckout } from '../lib/tipos'
+import type { Compra, NecesidadPublica } from '../lib/tipos'
 
-const PASOS = ['Tu negocio', 'Tu equipo', 'Módulos', 'Pago']
+const PASOS = ['Tu negocio', 'Tu equipo', 'Tus necesidades', 'Pago']
+
+const STARTER = ['reservas_online', 'asistente_ia', 'whatsapp']
 
 const entrada =
   'w-full rounded-xl border border-blanco/12 bg-abisal/80 px-4 py-3 text-sm text-blanco outline-none transition-colors placeholder:text-bruma/40 focus:border-cian/50 focus:ring-1 focus:ring-cian/30'
@@ -26,7 +28,7 @@ function formatearCLP(valor: number) {
 }
 
 export function PaginaCompra() {
-  const [modulos, setModulos] = useState<ModuloCheckout[]>([])
+  const [necesidades, setNecesidades] = useState<NecesidadPublica[]>([])
   const [rubros, setRubros] = useState<{ codigo: string; nombre: string }[]>([])
   const [cargando, setCargando] = useState(true)
   const [paso, setPaso] = useState(0)
@@ -44,6 +46,7 @@ export function PaginaCompra() {
   const [adminTelefono, setAdminTelefono] = useState('')
 
   const [seleccionados, setSeleccionados] = useState<Record<string, boolean>>({})
+  const [compraPendiente, setCompraPendiente] = useState<Compra | null>(null)
 
   const [enviando, setEnviando] = useState(false)
   const [error, setError] = useState('')
@@ -53,7 +56,7 @@ export function PaginaCompra() {
     api
       .checkoutCatalogo()
       .then((datos) => {
-        setModulos(datos.modulos)
+        setNecesidades(datos.necesidades)
         setRubros(datos.rubros)
         if (datos.rubros.length > 0) setRubroCodigo(datos.rubros[0].codigo)
       })
@@ -75,14 +78,6 @@ export function PaginaCompra() {
     }, 500)
     return () => clearTimeout(temporizador)
   }, [slug])
-
-  const total = useMemo(
-    () =>
-      modulos
-        .filter((m) => seleccionados[m.codigo])
-        .reduce((suma, m) => suma + (m.precio_mensual_clp || 0), 0),
-    [modulos, seleccionados],
-  )
 
   function generarSlug(nombre: string) {
     const candidato = nombre
@@ -115,10 +110,13 @@ export function PaginaCompra() {
         /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(adminCorreo.trim())
       )
     }
+    if (paso === 2) {
+      return Object.keys(seleccionados).length > 0
+    }
     return true
   }
 
-  async function finalizar() {
+  async function crearPedido() {
     setError('')
     setEnviando(true)
     try {
@@ -131,9 +129,22 @@ export function PaginaCompra() {
         admin_nombre: adminNombre,
         admin_correo: adminCorreo,
         admin_telefono: adminTelefono || null,
-        modulos: Object.keys(seleccionados).map((codigo) => ({ modulo_codigo: codigo })),
+        necesidades: Object.keys(seleccionados),
       })
-      const pagada = await api.pagarCompra(compra.id)
+      setCompraPendiente(compra)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo crear el pedido')
+    } finally {
+      setEnviando(false)
+    }
+  }
+
+  async function finalizar() {
+    if (!compraPendiente) return
+    setError('')
+    setEnviando(true)
+    try {
+      const pagada = await api.pagarCompra(compraPendiente.id)
       setResultado(pagada)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo completar la compra')
@@ -450,58 +461,73 @@ export function PaginaCompra() {
               <div className="space-y-4">
                 <div>
                   <h2 className="text-lg font-semibold text-blanco">
-                    ¿Qué te gustaría tener desde el día uno?
+                    Cuéntanos qué necesitas y lo armamos
                   </h2>
                   <p className="mt-1 text-sm text-bruma">
-                    Elige lo que tu negocio necesita ahora. Puedes sumar más
-                    después, cuando quieras.
+                    Responde las preguntas que te hagan sentido. Nosotros
+                    elegimos los módulos correctos para ti.
                   </p>
                 </div>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  {modulos.map((modulo) => {
-                    const activo = !!seleccionados[modulo.codigo]
+                <div className="space-y-3">
+                  {necesidades.map((necesidad) => {
+                    const activo = !!seleccionados[necesidad.codigo]
                     return (
-                      <label
-                        key={modulo.codigo}
-                        className={`cursor-pointer rounded-2xl border p-4 transition-all ${
+                      <button
+                        key={necesidad.codigo}
+                        type="button"
+                        onClick={() =>
+                          setSeleccionados({
+                            ...seleccionados,
+                            [necesidad.codigo]: !activo,
+                          })
+                        }
+                        className={`w-full cursor-pointer rounded-2xl border p-4 text-left transition-all sm:p-5 ${
                           activo
                             ? 'border-cian/50 bg-cian/5 shadow-[0_0_26px_-14px_rgba(0,223,240,0.6)]'
                             : 'border-blanco/10 bg-abisal/60 hover:border-blanco/25'
                         }`}
                       >
-                        <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-start justify-between gap-3">
                           <div>
-                            <p className="text-sm font-semibold text-blanco">{modulo.nombre}</p>
-                            <p className="mt-1 text-xs leading-relaxed text-bruma">
-                              {modulo.descripcion}
+                            <p className="text-base font-semibold text-blanco">
+                              {necesidad.etiqueta}
+                            </p>
+                            <p className="mt-1 text-sm leading-relaxed text-bruma">
+                              {necesidad.ayuda}
+                            </p>
+                            <p className="mt-2 text-[11px] text-bruma/60">
+                              Incluye: {necesidad.incluye.join(' · ') || '—'}
                             </p>
                           </div>
-                          <input
-                            type="checkbox"
-                            className="mt-0.5 h-4 w-4 accent-cyan-400"
-                            checked={activo}
-                            onChange={(e) =>
-                              setSeleccionados({ ...seleccionados, [modulo.codigo]: e.target.checked })
-                            }
-                          />
+                          <span
+                            className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs font-bold ${
+                              activo
+                                ? 'border-turquesa bg-turquesa/20 text-turquesa'
+                                : 'border-blanco/25 text-transparent'
+                            }`}
+                          >
+                            ✓
+                          </span>
                         </div>
-                        {modulo.limite_estandar != null && (
-                          <p className="mt-2 text-[11px] text-bruma/70">
-                            Incluye {modulo.limite_estandar.toLocaleString('es-CL')} por mes
-                            como estándar.
-                          </p>
-                        )}
-                        <p className="mt-2 text-xs font-semibold text-cian">
-                          {modulo.precio_mensual_clp > 0
-                            ? `${formatearCLP(modulo.precio_mensual_clp)} / mes`
-                            : 'Incluido por ahora'}
-                        </p>
-                      </label>
+                      </button>
                     )
                   })}
                 </div>
-                <p className="rounded-xl border border-blanco/10 bg-abisal/60 px-4 py-3 text-xs leading-relaxed text-bruma">
-                  ¿Tu equipo es más grande o necesitas otros límites?{' '}
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSeleccionados(
+                      Object.fromEntries(
+                        STARTER.map((codigo) => [codigo, true]),
+                      ),
+                    )
+                  }
+                  className="w-full rounded-2xl border border-dashed border-violeta/40 bg-violeta/5 px-4 py-3.5 text-sm font-semibold text-violeta transition-colors hover:bg-violeta/10"
+                >
+                  ¿No estás seguro? Te recomendamos lo esencial
+                </button>
+                <p className="text-xs leading-relaxed text-bruma/60">
+                  ¿Tu equipo es más grande o necesitas algo especial?{' '}
                   <a href="/#contacto" className="font-semibold text-cian hover:text-turquesa">
                     Conversemos y lo armamos contigo
                   </a>
@@ -538,23 +564,31 @@ export function PaginaCompra() {
                     </div>
                   ))}
                   <div className="flex justify-between gap-4 border-t border-blanco/8 pt-2.5">
-                    <dt className="text-bruma/70">Módulos</dt>
+                    <dt className="text-bruma/70">Elegiste</dt>
                     <dd className="text-right text-blanco">
                       {Object.keys(seleccionados).length === 0
-                        ? 'La agenda base'
+                        ? '—'
                         : Object.keys(seleccionados)
-                            .map((codigo) => modulos.find((m) => m.codigo === codigo)?.nombre ?? codigo)
-                            .join(', ')}
+                            .map(
+                              (codigo) =>
+                                necesidades.find((n) => n.codigo === codigo)?.etiqueta ??
+                                codigo,
+                            )
+                            .join(' · ')}
                     </dd>
                   </div>
                 </dl>
 
-                <div className="flex items-center justify-between rounded-2xl border border-cian/30 bg-cian/5 px-5 py-4">
-                  <span className="text-sm font-semibold text-bruma">Total mensual</span>
-                  <span className="text-2xl font-bold texto-gradiente">
-                    {formatearCLP(total)}
-                  </span>
-                </div>
+                {compraPendiente && (
+                  <div className="flex items-center justify-between rounded-2xl border border-cian/30 bg-cian/5 px-5 py-4">
+                    <span className="text-sm font-semibold text-bruma">Total mensual</span>
+                    <span className="text-2xl font-bold texto-gradiente">
+                      {compraPendiente.total_clp > 0
+                        ? formatearCLP(compraPendiente.total_clp)
+                        : 'Sin costo por ahora'}
+                    </span>
+                  </div>
+                )}
               </div>
             )}
 
@@ -576,14 +610,27 @@ export function PaginaCompra() {
                 >
                   Continuar →
                 </button>
-              ) : (
+              ) : compraPendiente ? (
                 <button
                   type="button"
                   disabled={enviando}
                   onClick={() => void finalizar()}
                   className="rounded-full bg-gradient-to-r from-violeta via-electrica to-cian px-7 py-3 text-sm font-semibold text-blanco transition-all hover:shadow-[0_0_30px_-8px_rgba(0,223,240,0.6)] disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {enviando ? 'Procesando…' : `Pagar ${formatearCLP(total)} y activar`}
+                  {enviando
+                    ? 'Procesando…'
+                    : compraPendiente.total_clp > 0
+                      ? `Pagar ${formatearCLP(compraPendiente.total_clp)} y activar`
+                      : 'Activar mi Calenzia'}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={enviando}
+                  onClick={() => void crearPedido()}
+                  className="rounded-full bg-gradient-to-r from-violeta via-electrica to-cian px-7 py-3 text-sm font-semibold text-blanco transition-all hover:shadow-[0_0_30px_-8px_rgba(0,223,240,0.6)] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {enviando ? 'Preparando…' : 'Crear pedido →'}
                 </button>
               )}
             </div>

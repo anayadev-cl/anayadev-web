@@ -4,7 +4,8 @@ import type {
   ContenidoPublico,
   MensajeContacto,
   ModuloCheckout,
-  ModuloSeleccionado,
+  NecesidadCheckout,
+  NecesidadPublica,
   Producto,
   ReglaChatbot,
   RubroCheckout,
@@ -56,8 +57,14 @@ export const api = {
       body: JSON.stringify({ mensaje }),
     })).json(),
 
+  chatbotAdjunto: async (formulario: FormData): Promise<ChatbotRespuestaApi> =>
+    (await pedir('/api/v1/publico/chatbot/adjunto', {
+      method: 'POST',
+      body: formulario,
+    })).json(),
+
   checkoutCatalogo: async (): Promise<{
-    modulos: ModuloCheckout[]
+    necesidades: NecesidadPublica[]
     rubros: { codigo: string; nombre: string }[]
     pais: string
   }> => (await pedir('/api/v1/publico/checkout')).json(),
@@ -76,7 +83,7 @@ export const api = {
     admin_nombre: string
     admin_correo: string
     admin_telefono?: string | null
-    modulos: ModuloSeleccionado[]
+    necesidades: string[]
   }): Promise<Compra> =>
     (await pedir('/api/v1/publico/compras', {
       method: 'POST',
@@ -183,6 +190,18 @@ export const api = {
       (await pedir(`/api/v1/admin/checkout/rubros/${id}`, { method: 'PUT', body: JSON.stringify(cuerpo) })).json(),
     eliminar: async (id: number) => {
       await pedir(`/api/v1/admin/checkout/rubros/${id}`, { method: 'DELETE' })
+    },
+  },
+
+  necesidadesCheckout: {
+    listar: async (): Promise<NecesidadCheckout[]> =>
+      (await pedir('/api/v1/admin/checkout/necesidades')).json(),
+    crear: async (cuerpo: Omit<NecesidadCheckout, 'id'>): Promise<NecesidadCheckout> =>
+      (await pedir('/api/v1/admin/checkout/necesidades', { method: 'POST', body: JSON.stringify(cuerpo) })).json(),
+    actualizar: async (id: number, cuerpo: Omit<NecesidadCheckout, 'id'>): Promise<NecesidadCheckout> =>
+      (await pedir(`/api/v1/admin/checkout/necesidades/${id}`, { method: 'PUT', body: JSON.stringify(cuerpo) })).json(),
+    eliminar: async (id: number) => {
+      await pedir(`/api/v1/admin/checkout/necesidades/${id}`, { method: 'DELETE' })
     },
   },
 

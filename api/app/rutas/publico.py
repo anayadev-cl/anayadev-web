@@ -1,12 +1,14 @@
 import re
 import unicodedata
+from pathlib import Path
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from sqlalchemy.orm import Session
 
 from .. import calenzia as integracion_calenzia
 from ..bd import get_sesion
+from ..config import ajustes
 from ..correo import enviar_correo_contacto
 from ..esquemas import (
     ChatbotPeticion,
@@ -16,11 +18,13 @@ from ..esquemas import (
     ContactoPeticion,
     ContactoRespuesta,
 )
+from ..limites import permitido
 from ..modelos import (
     Ajuste,
     Compra,
     MensajeContacto,
     ModuloCheckout,
+    NecesidadCheckout,
     Producto,
     RespuestaChatbot,
     RubroCheckout,
@@ -29,6 +33,8 @@ from ..modelos import (
 from ..webhook import enviar_webhook_onboarding, total_modulos
 
 router = APIRouter()
+
+EXTENSIONES_PERMITIDAS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".txt", ".csv"}
 
 
 def _url_calenzia(sesion: Session) -> str | None:
@@ -111,7 +117,17 @@ def contenido_publico(sesion: Session = Depends(get_sesion)):
 
 
 @router.post("/contacto", response_model=ContactoRespuesta, status_code=201)
-def recibir_contacto(cuerpo: ContactoPeticion, sesion: Session = Depends(get_sesion)):
+def recibir_contacto(
+    cuerpo: ContactoPeticion,
+    peticion: Request,
+    sesion: Session = Depends(get_sesion),
+):
+    ip = peticion.client.host if peticion.client else "desconocida"
+    if cuerpo.sitio_web.strip():
+        raise HTTPException(422, "El mensaje no es válido")
+    if not permitido(f"contacto:{ip}", 4, 600):
+        raise HTTPException(429, "Demasiados mensajes. Intenta más tarde.")
+
     nombre = cuerpo.nombre.strip()
     correo = cuerpo.correo.strip()
     mensaje = cuerpo.mensaje.strip()
@@ -137,7 +153,15 @@ def recibir_contacto(cuerpo: ContactoPeticion, sesion: Session = Depends(get_ses
 
 
 @router.post("/chatbot", response_model=ChatbotRespuesta)
-def responder_chatbot(cuerpo: ChatbotPeticion, sesion: Session = Depends(get_sesion)):
+def responder_chatbot(
+    cuerpo: ChatbotPeticion,
+    peticion: Request,
+    sesion: Session = Depends(get_sesion),
+):
+    ip = peticion.client.host if peticion.client else "desconocida"
+    if not permitido(f"chatbot:{ip}", 40, 300):
+        raise HTTPException(429, "Demasiados mensajes. Espera un momento.")
+
     mensaje = _normalizar(cuerpo.mensaje)
     if not mensaje:
         raise HTTPException(422, "El mensaje está vacío")
@@ -177,6 +201,71 @@ def responder_chatbot(cuerpo: ChatbotPeticion, sesion: Session = Depends(get_ses
     )
 
 
+@router.post("/chatbot/adjunto", response_model=ChatbotRespuesta)
+async def chatbot_con_adjunto(
+    peticion: Request,
+    mensaje: str = Form(default=""),
+    correo: str = Form(default=""),
+    sitio_web: str = Form(default=""),
+    archivo: UploadFile | None = File(default=None),
+    sesion: Session = Depends(get_sesion),
+):
+    ip = peticion.client.host if peticion.client else "desconocida"
+    if sitio_web.strip():
+        raise HTTPException(422, "El mensaje no es válido")
+    if not permitido(f"chatbot-adjunto:{ip}", 6, 600):
+        raise HTTPException(429, "Demasiados mensajes. Intenta más tarde.")
+
+    texto = mensaje.strip()
+    correo_limpio = correo.strip()
+    if correo_limpio and not re.match(
+        r"^[^@\s]+@[^@\s]+\.[^@\s]+$", correo_limpio
+    ):
+        raise HTTPException(422, "El correo no es válido")
+
+    ruta_adjunto = None
+    nombre_archivo = None
+    if archivo is not None and archivo.filename:
+        extension = Path(archivo.filename or "").suffix.lower()
+        if extension not in EXTENSIONES_PERMITIDAS:
+            raise HTTPException(422, "Formato de archivo no permitido")
+        contenido = await archivo.read()
+        if len(contenido) > 10 * 1024 * 1024:
+            raise HTTPException(422, "El archivo supera los 10 MB")
+        nombre_archivo = archivo.filename
+        nombre = f"{uuid4().hex[:10]}{extension}"
+        ajustes.directorio_uploads.mkdir(parents=True, exist_ok=True)
+        (ajustes.directorio_uploads / nombre).write_bytes(contenido)
+        ruta_adjunto = f"/media/{nombre}"
+
+    detalle = texto if texto else "(solo adjunto)"
+    if ruta_adjunto:
+        detalle = f"{detalle}\nAdjunto: {nombre_archivo} ({ruta_adjunto})"
+
+    registro = MensajeContacto(
+        nombre="Chat del sitio",
+        correo=correo_limpio or "sin correo",
+        mensaje=detalle,
+    )
+    sesion.add(registro)
+    sesion.commit()
+    sesion.refresh(registro)
+    enviar_correo_contacto("Chat del sitio", correo_limpio or "sin correo", detalle)
+
+    if correo_limpio:
+        respuesta = (
+            "¡Recibido! Tu mensaje" + (" y tu archivo" if ruta_adjunto else "")
+            + f" quedaron con nuestro equipo. Te responderemos a {correo_limpio}."
+        )
+    else:
+        respuesta = (
+            "¡Recibido! Tu mensaje" + (" y tu archivo" if ruta_adjunto else "")
+            + " quedaron con nuestro equipo. Si quieres que te respondamos "
+            "directo, deja tu correo en el campo junto al clip."
+        )
+    return ChatbotRespuesta(respuesta=respuesta)
+
+
 @router.get("/checkout")
 def catalogo_checkout(sesion: Session = Depends(get_sesion)):
     modulos = (
@@ -185,19 +274,28 @@ def catalogo_checkout(sesion: Session = Depends(get_sesion)):
         .order_by(ModuloCheckout.orden, ModuloCheckout.id)
         .all()
     )
+    modulos_por_codigo = {m.codigo: m for m in modulos}
+    necesidades = (
+        sesion.query(NecesidadCheckout)
+        .filter(NecesidadCheckout.activo.is_(True))
+        .order_by(NecesidadCheckout.orden, NecesidadCheckout.id)
+        .all()
+    )
     rubros = _rubros_para_checkout(sesion)
     return {
-        "modulos": [
+        "necesidades": [
             {
-                "id": m.id,
-                "codigo": m.codigo,
-                "nombre": m.nombre,
-                "descripcion": m.descripcion,
-                "precio_mensual_clp": m.precio_mensual_clp,
-                "limite_estandar": m.limite_estandar,
-                "orden": m.orden,
+                "id": n.id,
+                "codigo": n.codigo,
+                "etiqueta": n.etiqueta,
+                "ayuda": n.ayuda,
+                "incluye": [
+                    modulos_por_codigo[c].nombre
+                    for c in (n.modulos or [])
+                    if c in modulos_por_codigo
+                ],
             }
-            for m in modulos
+            for n in necesidades
         ],
         "rubros": rubros,
         "pais": "CL",
@@ -269,11 +367,25 @@ def crear_compra(cuerpo: CompraPeticion, sesion: Session = Depends(get_sesion)):
         .filter(ModuloCheckout.activo.is_(True))
         .all()
     }
+    necesidades_existentes = {
+        n.codigo: n
+        for n in sesion.query(NecesidadCheckout)
+        .filter(NecesidadCheckout.activo.is_(True))
+        .all()
+    }
+    codigos_seleccionados: dict[str, None] = {}
+    for codigo_necesidad in cuerpo.necesidades:
+        necesidad = necesidades_existentes.get(codigo_necesidad.strip().lower())
+        if necesidad is None:
+            raise HTTPException(422, f"La necesidad '{codigo_necesidad}' no existe")
+        for codigo_modulo in necesidad.modulos or []:
+            codigos_seleccionados[codigo_modulo] = None
+
     modulos_seleccionados = []
-    for seleccion in cuerpo.modulos:
-        modulo = modulos_existentes.get(seleccion.modulo_codigo)
+    for codigo_modulo in codigos_seleccionados:
+        modulo = modulos_existentes.get(codigo_modulo)
         if modulo is None:
-            raise HTTPException(422, f"El módulo '{seleccion.modulo_codigo}' no existe")
+            continue
         modulos_seleccionados.append(
             {
                 "modulo_codigo": modulo.codigo,
@@ -295,6 +407,7 @@ def crear_compra(cuerpo: CompraPeticion, sesion: Session = Depends(get_sesion)):
             "pais": "CL",
             "timezone": "America/Santiago",
             "equipo_personas": (cuerpo.equipo_personas or "").strip() or None,
+            "necesidades": [n.strip().lower() for n in cuerpo.necesidades],
             "admin_nombre": cuerpo.admin_nombre.strip(),
             "admin_correo": cuerpo.admin_correo.strip(),
             "admin_telefono": (cuerpo.admin_telefono or "").strip() or None,

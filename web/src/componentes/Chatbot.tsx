@@ -8,13 +8,26 @@ interface MensajeChat {
   sugerencias?: string[]
 }
 
+function normalizar(texto: string) {
+  return texto
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+}
+
 export function Chatbot() {
   const [abierto, setAbierto] = useState(false)
   const [mensajes, setMensajes] = useState<MensajeChat[]>([])
   const [entrada, setEntrada] = useState('')
   const [escribiendo, setEscribiendo] = useState(false)
   const [sinLeer, setSinLeer] = useState(0)
+  const [archivo, setArchivo] = useState<File | null>(null)
+  const [correoContacto, setCorreoContacto] = useState('')
+  const [enviandoAdjunto, setEnviandoAdjunto] = useState(false)
+  const preguntadas = useRef<Set<string>>(new Set())
   const zonaMensajes = useRef<HTMLDivElement>(null)
+  const inputArchivo = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (abierto && mensajes.length === 0) {
@@ -24,8 +37,17 @@ export function Chatbot() {
   }, [abierto])
 
   useEffect(() => {
+    const abrirDesdeSitio = () => {
+      setAbierto(true)
+      setSinLeer(0)
+    }
+    window.addEventListener('abrir-chat', abrirDesdeSitio)
+    return () => window.removeEventListener('abrir-chat', abrirDesdeSitio)
+  }, [])
+
+  useEffect(() => {
     zonaMensajes.current?.scrollTo({ top: zonaMensajes.current.scrollHeight, behavior: 'smooth' })
-  }, [mensajes, escribiendo])
+  }, [mensajes, escribiendo, archivo])
 
   async function saludar() {
     setEscribiendo(true)
@@ -37,7 +59,7 @@ export function Chatbot() {
         {
           origen: 'bot',
           texto: '¡Hola! Soy el asistente de anayadev. ¿En qué te ayudo?',
-          sugerencias: ['¿Qué es Calenzia?', '¿Cómo la compro?', 'Hablar con una persona'],
+          sugerencias: ['¿Qué es Calenzia?', '¿Cómo la adquiero?', 'Hablar con una persona'],
         },
       ])
     } finally {
@@ -53,6 +75,7 @@ export function Chatbot() {
     setEscribiendo(true)
     try {
       const respuesta = await api.chatbot(limpio)
+      preguntadas.current.add(normalizar(limpio))
       setMensajes((actuales) => [
         ...actuales,
         { origen: 'bot', texto: respuesta.respuesta, sugerencias: respuesta.sugerencias },
@@ -62,11 +85,46 @@ export function Chatbot() {
         ...actuales,
         {
           origen: 'bot',
-          texto: 'Tuvimos un problema de conexión. Intenta de nuevo o escríbenos por el formulario de contacto.',
+          texto: 'Tuvimos un problema de conexión. Intenta de nuevo en un momento.',
         },
       ])
     } finally {
       setEscribiendo(false)
+    }
+  }
+
+  async function enviarAdjunto() {
+    if (!archivo || enviandoAdjunto) return
+    setEnviandoAdjunto(true)
+    const texto = entrada.trim() || 'Te adjunto esto por si ayuda con mi consulta.'
+    setEntrada('')
+    setMensajes((actuales) => [
+      ...actuales,
+      { origen: 'usuario', texto: `${texto}\n[Adjunto: ${archivo.name}]` },
+    ])
+    setArchivo(null)
+    try {
+      const formulario = new FormData()
+      formulario.append('mensaje', texto)
+      formulario.append('correo', correoContacto)
+      formulario.append('sitio_web', '')
+      formulario.append('archivo', archivo)
+      const respuesta = await api.chatbotAdjunto(formulario)
+      setMensajes((actuales) => [
+        ...actuales,
+        { origen: 'bot', texto: respuesta.respuesta },
+      ])
+      setCorreoContacto('')
+    } catch {
+      setMensajes((actuales) => [
+        ...actuales,
+        {
+          origen: 'bot',
+          texto: 'No se pudo enviar el archivo. Intenta de nuevo o escríbenos a hola@anayadev.cl.',
+        },
+      ])
+    } finally {
+      setEnviandoAdjunto(false)
     }
   }
 
@@ -78,6 +136,12 @@ export function Chatbot() {
   useEffect(() => {
     if (!abierto && mensajes.length > 0) setSinLeer(1)
   }, [abierto, mensajes.length])
+
+  function sugerenciasFiltradas(sugerencias: string[] | undefined, indice: number) {
+    const lista = sugerencias ?? []
+    if (indice !== mensajes.length - 1) return []
+    return lista.filter((s) => !preguntadas.current.has(normalizar(s)))
+  }
 
   return (
     <>
@@ -113,7 +177,7 @@ export function Chatbot() {
                 <p className="text-sm font-semibold text-blanco">Asistente virtual</p>
                 <p className="flex items-center gap-1.5 text-xs text-bruma/70">
                   <span className="h-1.5 w-1.5 rounded-full bg-turquesa" />
-                  en línea
+                  en línea · clientes y futuros clientes
                 </p>
               </div>
             </div>
@@ -130,23 +194,22 @@ export function Chatbot() {
           </div>
 
           <div ref={zonaMensajes} className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
-            {mensajes.map((mensaje, i) => (
-              <div key={i}>
-                <div
-                  className={`max-w-[85%] whitespace-pre-line rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
-                    mensaje.origen === 'usuario'
-                      ? 'ml-auto w-fit rounded-br-md bg-gradient-to-r from-electrica to-violeta text-blanco'
-                      : 'tarjeta-vidrio rounded-bl-md text-bruma'
-                  }`}
-                >
-                  {mensaje.texto}
-                </div>
-                {mensaje.origen === 'bot' &&
-                  i === mensajes.length - 1 &&
-                  !escribiendo &&
-                  (mensaje.sugerencias ?? []).length > 0 && (
+            {mensajes.map((mensaje, i) => {
+              const sugerencias = sugerenciasFiltradas(mensaje.sugerencias, i)
+              return (
+                <div key={i}>
+                  <div
+                    className={`max-w-[85%] whitespace-pre-line rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
+                      mensaje.origen === 'usuario'
+                        ? 'ml-auto w-fit rounded-br-md bg-gradient-to-r from-electrica to-violeta text-blanco'
+                        : 'tarjeta-vidrio rounded-bl-md text-bruma'
+                    }`}
+                  >
+                    {mensaje.texto}
+                  </div>
+                  {mensaje.origen === 'bot' && !escribiendo && sugerencias.length > 0 && (
                     <div className="mt-2.5 flex flex-wrap gap-1.5">
-                      {mensaje.sugerencias!.map((sugerencia) => (
+                      {sugerencias.map((sugerencia) => (
                         <button
                           key={sugerencia}
                           type="button"
@@ -158,8 +221,9 @@ export function Chatbot() {
                       ))}
                     </div>
                   )}
-              </div>
-            ))}
+                </div>
+              )
+            })}
 
             {escribiendo && (
               <div className="tarjeta-vidrio w-fit rounded-2xl rounded-bl-md px-4 py-3">
@@ -172,22 +236,66 @@ export function Chatbot() {
             )}
           </div>
 
+          {archivo && (
+            <div className="border-t border-blanco/8 px-4 pt-3">
+              <div className="flex items-center justify-between gap-2 rounded-xl border border-cian/25 bg-cian/5 px-3 py-2 text-xs text-bruma">
+                <span className="truncate">
+                  Adjunto: {archivo.name} ({Math.round(archivo.size / 1024)} KB)
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setArchivo(null)}
+                  className="text-bruma hover:text-red-300"
+                  aria-label="Quitar archivo"
+                >
+                  ✕
+                </button>
+              </div>
+              <input
+                type="email"
+                placeholder="Tu correo (para responderte)"
+                value={correoContacto}
+                onChange={(e) => setCorreoContacto(e.target.value)}
+                className="mt-2 w-full rounded-xl border border-blanco/10 bg-noche/70 px-4 py-2.5 text-sm text-blanco outline-none placeholder:text-bruma/40 focus:border-cian/50"
+              />
+            </div>
+          )}
+
           <form
             onSubmit={(e) => {
               e.preventDefault()
-              void enviar(entrada)
+              if (archivo) void enviarAdjunto()
+              else void enviar(entrada)
             }}
-            className="flex gap-2 border-t border-blanco/8 p-3"
+            className="flex items-center gap-2 border-t border-blanco/8 p-3"
           >
+            <input
+              ref={inputArchivo}
+              type="file"
+              accept=".png,.jpg,.jpeg,.webp,.gif,.svg,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv"
+              className="hidden"
+              onChange={(e) => setArchivo(e.target.files?.[0] ?? null)}
+            />
+            <button
+              type="button"
+              onClick={() => inputArchivo.current?.click()}
+              aria-label="Adjuntar archivo"
+              title="Adjuntar documento o imagen"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-blanco/10 text-bruma transition-colors hover:border-cian/40 hover:text-cian"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+              </svg>
+            </button>
             <input
               value={entrada}
               onChange={(e) => setEntrada(e.target.value)}
-              placeholder="Escribe tu mensaje…"
+              placeholder={archivo ? 'Escribe algo sobre tu archivo…' : 'Escribe tu mensaje…'}
               className="w-full rounded-xl border border-blanco/10 bg-noche/70 px-4 py-2.5 text-sm text-blanco outline-none placeholder:text-bruma/40 focus:border-cian/50"
             />
             <button
               type="submit"
-              disabled={!entrada.trim() || escribiendo}
+              disabled={(archivo ? enviandoAdjunto : !entrada.trim() || escribiendo)}
               aria-label="Enviar mensaje"
               className="flex h-10 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-r from-violeta to-cian text-blanco transition-opacity disabled:opacity-40"
             >

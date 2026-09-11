@@ -84,6 +84,24 @@ export interface RubroCheckout {
   orden: number
 }
 
+export interface NecesidadCheckout {
+  id: number
+  codigo: string
+  etiqueta: string
+  ayuda: string
+  modulos: string[]
+  activo: boolean
+  orden: number
+}
+
+export interface NecesidadPublica {
+  id: number
+  codigo: string
+  etiqueta: string
+  ayuda: string
+  incluye: string[]
+}
+
 export interface ModuloSeleccionado {
   modulo_codigo: string
 }
@@ -101,6 +119,7 @@ export interface Compra {
     pais: string
     timezone: string
     equipo_personas: string | null
+    necesidades: string[]
     admin_nombre: string
     admin_correo: string
     admin_telefono: string | null

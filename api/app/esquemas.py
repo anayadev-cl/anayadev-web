@@ -60,6 +60,7 @@ class ContactoPeticion(BaseModel):
     nombre: str
     correo: str
     mensaje: str
+    sitio_web: str = ""
 
 
 class ContactoRespuesta(BaseModel):
@@ -142,8 +143,24 @@ class RubroCheckoutGuardar(BaseModel):
     orden: int = 0
 
 
-class ModuloSeleccionadoPeticion(BaseModel):
-    modulo_codigo: str
+class NecesidadCheckoutAdmin(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    codigo: str
+    etiqueta: str
+    ayuda: str
+    modulos: list[str] = Field(default_factory=list)
+    activo: bool
+    orden: int
+
+
+class NecesidadCheckoutGuardar(BaseModel):
+    codigo: str
+    etiqueta: str
+    ayuda: str = ""
+    modulos: list[str] = Field(default_factory=list)
+    activo: bool = True
+    orden: int = 0
 
 
 class CompraPeticion(BaseModel):
@@ -155,7 +172,7 @@ class CompraPeticion(BaseModel):
     admin_nombre: str
     admin_correo: str
     admin_telefono: str | None = None
-    modulos: list[ModuloSeleccionadoPeticion] = Field(default_factory=list)
+    necesidades: list[str] = Field(default_factory=list)
 
 
 class CompraRespuesta(BaseModel):

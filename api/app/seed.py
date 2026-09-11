@@ -10,6 +10,7 @@ from .config import ajustes
 from .modelos import (
     Ajuste,
     ModuloCheckout,
+    NecesidadCheckout,
     Producto,
     RespuestaChatbot,
     RubroCheckout,
@@ -47,10 +48,7 @@ SECCIONES_INICIALES = [
         "imagen_url": None,
         "datos": {
             "badge": "SaaS con IA en el core",
-            "botones": [
-                {"texto": "Comprar Calenzia", "enlace": "/comprar", "estilo": "primario"},
-                {"texto": "Conoce Calenzia", "enlace": "#productos", "estilo": "secundario"},
-            ],
+            "botones": [],
             "resumen": [
                 "1 producto en producción",
                 "1 producto en desarrollo",
@@ -170,10 +168,9 @@ SECCIONES_INICIALES = [
         "tipo": "contacto",
         "titulo": "Conversemos",
         "subtitulo": (
-            "Podemos conversar de lo que necesites: probar Calenzia, comprarla "
-            "para tu negocio, acompañar la salida de Soluzia o proponer una "
-            "idea para la familia ZIA. Escríbenos y te respondemos de persona "
-            "a persona."
+            "El chat es nuestro canal directo: atiende tanto a futuros "
+            "clientes como a quienes ya usan Calenzia. Puedes adjuntar "
+            "documentos y te respondemos de persona a persona."
         ),
         "texto": "",
         "imagen_url": None,
@@ -266,21 +263,48 @@ RESPUESTAS_CHATBOT_INICIALES = [
     {
         "palabras_clave": (
             "contacto, correo, email, whatsapp, humano, persona, hablar con, "
-            "asesor, atencion, ayuda"
+            "asesor, atencion, ayuda, consulta"
         ),
         "respuesta": (
-            "Puedes escribirnos por el formulario de la sección «Conversemos», "
-            "al correo hola@anayadev.cl o por WhatsApp. Te respondemos de "
-            "persona a persona."
+            "Yo mismo puedo pasarte con el equipo: deja tu correo en el campo "
+            "junto al clip y adjunta lo que necesites (documentos, "
+            "pantallazos). También puedes escribirnos a hola@anayadev.cl o "
+            "por WhatsApp. Te respondemos de persona a persona."
         ),
         "sugerencias": ["¿Qué es Calenzia?", "¿Cómo la adquiero?"],
         "orden": 7,
     },
     {
+        "palabras_clave": (
+            "soy cliente, tengo cuenta, mi cuenta, soporte, problema, "
+            "no funciona, error, mi negocio, ya uso calenzia"
+        ),
+        "respuesta": (
+            "Si ya usas Calenzia, este mismo chat es tu canal: deja tu correo "
+            "junto al clip y adjunta lo que necesites (pantallazos, "
+            "documentos). Nuestro equipo lo revisa y te responde directo."
+        ),
+        "sugerencias": ["Adjuntar un documento", "¿Qué es la familia ZIA?"],
+        "orden": 8,
+    },
+    {
+        "palabras_clave": (
+            "adjuntar, adjunto, documento, archivo, pdf, imagen, pantallazo, "
+            "screenshot, subir"
+        ),
+        "respuesta": (
+            "Puedes adjuntar archivos con el clip de la barra del chat: "
+            "documentos, imágenes y PDF. Si dejas tu correo junto al clip, te "
+            "respondemos con todo el contexto."
+        ),
+        "sugerencias": ["Hablar con una persona"],
+        "orden": 9,
+    },
+    {
         "palabras_clave": "gracias, excelente, perfecto, genial",
         "respuesta": "¡Gracias a ti! Cualquier otra duda, aquí estoy.",
         "sugerencias": ["¿Cómo la adquiero?", "¿Qué es la familia ZIA?"],
-        "orden": 8,
+        "orden": 10,
     },
 ]
 
@@ -306,6 +330,33 @@ RUBROS_CHECKOUT_INICIALES = [
     ("belleza", "Belleza y estética"),
     ("servicios", "Servicios profesionales"),
     ("otros", "Otro rubro"),
+]
+
+NECESIDADES_CHECKOUT_INICIALES = [
+    (
+        "reservas_online",
+        "¿Quieres que tus clientes reserven solos, sin llamarte?",
+        "Tus clientes eligen su hora desde tu propia página, a cualquier hora.",
+        ["agenda", "agendamiento_publico"],
+    ),
+    (
+        "asistente_ia",
+        "¿Quieres que una IA atienda y agende por ti?",
+        "Responde consultas y agenda citas incluso fuera de horario.",
+        ["ia"],
+    ),
+    (
+        "whatsapp",
+        "¿Quieres recordatorios automáticos por WhatsApp?",
+        "Tus clientes recuerdan su hora sin que tengas que hacer nada.",
+        ["whatsapp"],
+    ),
+    (
+        "crecimiento",
+        "¿Quieres llegar a más clientes con campañas?",
+        "Promociones y mensajes masivos a tu cartera de clientes.",
+        ["campanas"],
+    ),
 ]
 
 PRODUCTOS_INICIALES = [
@@ -381,6 +432,7 @@ def sembrar() -> None:
         _sembrar_chatbot(sesion)
         _sembrar_checkout_modulos(sesion)
         _sembrar_checkout_rubros(sesion)
+        _sembrar_checkout_necesidades(sesion)
         sesion.commit()
     finally:
         sesion.close()
@@ -448,3 +500,20 @@ def _sembrar_checkout_rubros(sesion: Session) -> None:
         return
     for orden, (codigo, nombre) in enumerate(RUBROS_CHECKOUT_INICIALES):
         sesion.add(RubroCheckout(codigo=codigo, nombre=nombre, orden=orden))
+
+
+def _sembrar_checkout_necesidades(sesion: Session) -> None:
+    if sesion.query(NecesidadCheckout).count() > 0:
+        return
+    for orden, (codigo, etiqueta, ayuda, modulos) in enumerate(
+        NECESIDADES_CHECKOUT_INICIALES
+    ):
+        sesion.add(
+            NecesidadCheckout(
+                codigo=codigo,
+                etiqueta=etiqueta,
+                ayuda=ayuda,
+                modulos=modulos,
+                orden=orden,
+            )
+        )

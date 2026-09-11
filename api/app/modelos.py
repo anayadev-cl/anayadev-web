@@ -110,6 +110,24 @@ class RubroCheckout(Base):
     orden = Column(Integer, default=0)
 
 
+class NecesidadCheckout(Base):
+    """Necesidad del checkout: una pregunta simple que activa módulos.
+
+    El cliente elige necesidades, no módulos: cada necesidad mapea a un
+    conjunto de módulos (`modulos`, códigos de `checkout_modulos`).
+    """
+
+    __tablename__ = "checkout_necesidades"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    codigo = Column(String(50), unique=True)
+    etiqueta = Column(String(300))
+    ayuda = Column(Text, default="")
+    modulos = Column(JSON, default=list)
+    activo = Column(Boolean, default=True)
+    orden = Column(Integer, default=0)
+
+
 class Compra(Base):
     """Solicitud de compra de Calenzia desde el checkout del sitio."""
 

@@ -13,6 +13,8 @@ from ..esquemas import (
     MensajeContactoRespuesta,
     ModuloCheckoutAdmin,
     ModuloCheckoutGuardar,
+    NecesidadCheckoutAdmin,
+    NecesidadCheckoutGuardar,
     ProductoActualizar,
     ProductoCrear,
     ProductoRespuesta,
@@ -29,6 +31,7 @@ from ..modelos import (
     Compra,
     MensajeContacto,
     ModuloCheckout,
+    NecesidadCheckout,
     Producto,
     RespuestaChatbot,
     RubroCheckout,
@@ -499,6 +502,77 @@ def eliminar_rubro_checkout(
     if rubro is None:
         raise HTTPException(404, "Rubro inexistente")
     sesion.delete(rubro)
+    sesion.commit()
+
+
+@router.get("/checkout/necesidades", response_model=list[NecesidadCheckoutAdmin])
+def listar_necesidades_checkout(
+    sesion: Session = Depends(get_sesion), _: Usuario = Depends(admin_actual)
+):
+    return (
+        sesion.query(NecesidadCheckout)
+        .order_by(NecesidadCheckout.orden, NecesidadCheckout.id)
+        .all()
+    )
+
+
+@router.post("/checkout/necesidades", response_model=NecesidadCheckoutAdmin, status_code=201)
+def crear_necesidad_checkout(
+    cuerpo: NecesidadCheckoutGuardar,
+    sesion: Session = Depends(get_sesion),
+    _: Usuario = Depends(admin_actual),
+):
+    existente = (
+        sesion.query(NecesidadCheckout)
+        .filter(NecesidadCheckout.codigo == cuerpo.codigo)
+        .first()
+    )
+    if existente:
+        raise HTTPException(422, "Ya existe una necesidad con ese código")
+    necesidad = NecesidadCheckout(**cuerpo.model_dump())
+    sesion.add(necesidad)
+    sesion.commit()
+    sesion.refresh(necesidad)
+    return necesidad
+
+
+@router.put(
+    "/checkout/necesidades/{necesidad_id}", response_model=NecesidadCheckoutAdmin
+)
+def actualizar_necesidad_checkout(
+    necesidad_id: int,
+    cuerpo: NecesidadCheckoutGuardar,
+    sesion: Session = Depends(get_sesion),
+    _: Usuario = Depends(admin_actual),
+):
+    necesidad = sesion.get(NecesidadCheckout, necesidad_id)
+    if necesidad is None:
+        raise HTTPException(404, "Necesidad inexistente")
+    if cuerpo.codigo != necesidad.codigo:
+        existente = (
+            sesion.query(NecesidadCheckout)
+            .filter(NecesidadCheckout.codigo == cuerpo.codigo)
+            .first()
+        )
+        if existente:
+            raise HTTPException(422, "Ya existe una necesidad con ese código")
+    for campo, valor in cuerpo.model_dump().items():
+        setattr(necesidad, campo, valor)
+    sesion.commit()
+    sesion.refresh(necesidad)
+    return necesidad
+
+
+@router.delete("/checkout/necesidades/{necesidad_id}", status_code=204)
+def eliminar_necesidad_checkout(
+    necesidad_id: int,
+    sesion: Session = Depends(get_sesion),
+    _: Usuario = Depends(admin_actual),
+):
+    necesidad = sesion.get(NecesidadCheckout, necesidad_id)
+    if necesidad is None:
+        raise HTTPException(404, "Necesidad inexistente")
+    sesion.delete(necesidad)
     sesion.commit()
 
 
