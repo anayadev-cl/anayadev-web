@@ -22,7 +22,7 @@ from .seguridad import encriptar_clave
 AJUSTES_INICIALES = {
     "email_contacto": "hola@anayadev.cl",
     "whatsapp": "+56 9 0000 0000",
-    "instagram": "@anayadev.cl",
+    "instagram": "@anayadev_cl",
     "footer_eslogan": "Inteligencia que conecta",
     "chatbot_fallback": (
         "Buena pregunta. Todavía estoy aprendiendo, pero puedes escribirnos "
