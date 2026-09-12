@@ -178,12 +178,12 @@ export function PaginaCompra() {
             )}
           </span>
           <h1 className="mt-6 text-3xl font-bold text-blanco">
-            {exito ? '¡Tu Calenzia viene en camino!' : 'Recibimos todo, con un detalle'}
+            {exito ? '¡Solicitud recibida!' : 'Recibimos todo, con un detalle'}
           </h1>
           <p className="mt-4 text-base leading-relaxed text-bruma">
             {exito
-              ? `Tu pedido quedó registrado con el código ${resultado.codigo.toUpperCase()}. Estamos activando tu cuenta: te enviaremos el acceso al correo ${resultado.datos.admin_correo}.`
-              : 'Recibimos tu pago y tu pedido quedó guardado, pero la activación automática falló. Nuestro equipo lo activará manualmente y te contactará pronto.'}
+              ? `Tu solicitud quedó registrada con el código ${resultado.codigo.toUpperCase()}. Nuestro equipo la revisará y te contactará al correo ${resultado.datos.admin_correo} para activar tu cuenta de Calenzia.`
+              : 'Recibimos tu solicitud y quedó guardada, pero el registro automático falló. Nuestro equipo lo revisará manualmente y te contactará pronto.'}
           </p>
           <p className="mt-2 text-sm text-bruma/70">
             Tus clientes te encontrarán en{' '}
@@ -580,13 +580,20 @@ export function PaginaCompra() {
                 </dl>
 
                 {compraPendiente && (
-                  <div className="flex items-center justify-between rounded-2xl border border-cian/30 bg-cian/5 px-5 py-4">
-                    <span className="text-sm font-semibold text-bruma">Total mensual</span>
-                    <span className="text-2xl font-bold texto-gradiente">
-                      {compraPendiente.total_clp > 0
-                        ? formatearCLP(compraPendiente.total_clp)
-                        : 'Sin costo por ahora'}
-                    </span>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between rounded-2xl border border-cian/30 bg-cian/5 px-5 py-4">
+                      <span className="text-sm font-semibold text-bruma">Valor mensual</span>
+                      <span className="text-2xl font-bold texto-gradiente">
+                        {compraPendiente.total_clp > 0
+                          ? formatearCLP(compraPendiente.total_clp)
+                          : 'Sin costo por ahora'}
+                      </span>
+                    </div>
+                    <p className="rounded-xl border border-blanco/10 bg-abisal/60 px-4 py-3 text-xs leading-relaxed text-bruma">
+                      Todavía no hay pago en línea: al enviar, tu solicitud
+                      llega a nuestro equipo y activamos tu cuenta después de
+                      revisarla. Te contactaremos al correo que dejaste.
+                    </p>
                   </div>
                 )}
               </div>
@@ -617,11 +624,7 @@ export function PaginaCompra() {
                   onClick={() => void finalizar()}
                   className="rounded-full bg-gradient-to-r from-violeta via-electrica to-cian px-7 py-3 text-sm font-semibold text-blanco transition-all hover:shadow-[0_0_30px_-8px_rgba(0,223,240,0.6)] disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {enviando
-                    ? 'Procesando…'
-                    : compraPendiente.total_clp > 0
-                      ? `Pagar ${formatearCLP(compraPendiente.total_clp)} y activar`
-                      : 'Activar mi Calenzia'}
+                  {enviando ? 'Enviando…' : 'Enviar mi solicitud'}
                 </button>
               ) : (
                 <button

@@ -188,9 +188,10 @@ export function PanelCompras() {
         <div>
           <h1 className="text-2xl font-bold text-blanco">Compras de Calenzia</h1>
           <p className="mt-1 text-sm text-bruma">
-            Solicitudes del checkout. Al pagar, la compra se envía al webhook de
-            onboarding de Calenzia (configúralo en Ajustes) y el tenant se crea
-            con los datos y módulos elegidos.
+            Solicitudes del checkout. Al enviar, la solicitud se registra en
+            Calenzia como tenant en estado <span className="text-cian">demo</span> y
+            se activa desde el superadmin cuando la revisas (sin pasarela de
+            pago aún). Configura la URL y el secreto del webhook en Ajustes.
           </p>
         </div>
 

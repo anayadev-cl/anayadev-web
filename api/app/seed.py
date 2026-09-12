@@ -212,9 +212,9 @@ RESPUESTAS_CHATBOT_INICIALES = [
         "palabras_clave": "comprar, compra, compro, pago, pagar, precio, precios, cuanto cuesta, adquirir, adquiero, valor",
         "respuesta": (
             "Puedes adquirir Calenzia directo desde el sitio: presiona «Comprar "
-            "Calenzia», responde unas preguntas sobre tu negocio, elige los "
-            "módulos que necesites y finaliza el pago. Al terminar, creamos tu "
-            "cuenta y te llega un correo de acceso."
+            "Calenzia», responde unas preguntas sobre tu negocio y envía tu "
+            "solicitud. Nuestro equipo la revisa, activa tu cuenta y te "
+            "contacta por correo."
         ),
         "sugerencias": ["¿Qué módulos tiene?", "Hablar con una persona"],
         "orden": 2,
