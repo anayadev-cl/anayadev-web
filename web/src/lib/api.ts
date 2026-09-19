@@ -90,7 +90,7 @@ export const api = {
       body: JSON.stringify(cuerpo),
     })).json(),
 
-  pagarCompra: async (id: number): Promise<Compra> =>
+  enviarSolicitud: async (id: number): Promise<Compra> =>
     (await pedir(`/api/v1/publico/compras/${id}/pagar`, { method: 'POST' })).json(),
 
   login: async (usuario: string, clave: string) => {

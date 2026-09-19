@@ -4,7 +4,7 @@ import { Marca } from '../componentes/Marca'
 import { api } from '../lib/api'
 import type { Compra, NecesidadPublica } from '../lib/tipos'
 
-const PASOS = ['Tu negocio', 'Tu equipo', 'Tus necesidades', 'Pago']
+const PASOS = ['Tu negocio', 'Tu equipo', 'Tus necesidades', 'Enviar']
 
 const STARTER = ['reservas_online', 'asistente_ia', 'whatsapp']
 
@@ -144,51 +144,60 @@ export function PaginaCompra() {
     setError('')
     setEnviando(true)
     try {
-      const pagada = await api.pagarCompra(compraPendiente.id)
-      setResultado(pagada)
+      const compra = await api.enviarSolicitud(compraPendiente.id)
+      setResultado(compra)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'No se pudo completar la compra')
+      setError(e instanceof Error ? e.message : 'No se pudo enviar la solicitud')
     } finally {
       setEnviando(false)
     }
   }
 
   if (resultado) {
-    const exito = resultado.estado === 'enviada' || resultado.estado === 'pagada'
+    // 8.54 (S25): sin pasarela de pago, el resultado NUNCA es un pago ni una
+    // activación — es una SOLICITUD creada y el equipo contacta al cliente.
+    // 'enviada' (webhook ok, tenant creado pendiente) y 'pagada' (webhook sin
+    // configurar, activación manual) muestran el mismo mensaje honesto; solo
+    // 'error_webhook' se distingue (el equipo lo revisará).
+    const fallo = resultado.estado === 'error_webhook'
+    const telefono = (resultado.datos.admin_telefono ?? '').trim()
+    const contacto = telefono
+      ? `al correo ${resultado.datos.admin_correo} y/o al teléfono ${telefono}`
+      : `al correo ${resultado.datos.admin_correo}`
+    const titulo = fallo ? 'Recibimos tu solicitud, con un detalle' : '¡Solicitud creada!'
+    const detalle = fallo
+      ? 'No pagarás ahora y tu solicitud quedó guardada, pero el registro automático falló. Nuestro equipo lo revisará y te contactará pronto.'
+      : `Se creó tu solicitud con el código ${resultado.codigo.toUpperCase()}. No pagarás ahora: el equipo de anayadev se comunicará contigo ${contacto} para coordinar la activación de tu cuenta de Calenzia.`
     return (
       <div className="relative min-h-screen">
         <FondoCircuito />
         <div className="mx-auto flex min-h-screen max-w-xl flex-col items-center justify-center px-4 py-16 text-center">
           <span
             className={`flex h-16 w-16 items-center justify-center rounded-full border ${
-              exito
-                ? 'border-turquesa/40 bg-turquesa/10 text-turquesa'
-                : 'border-violeta/40 bg-violeta/10 text-violeta'
+              fallo
+                ? 'border-violeta/40 bg-violeta/10 text-violeta'
+                : 'border-turquesa/40 bg-turquesa/10 text-turquesa'
             }`}
           >
-            {exito ? (
+            {fallo ? (
               <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="m5 12 5 5L20 7" />
-              </svg>
-            ) : (
-              <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                 <path d="M12 9v4M12 17h.01" />
                 <circle cx="12" cy="12" r="9" />
               </svg>
+            ) : (
+              <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="m5 12 5 5L20 7" />
+              </svg>
             )}
           </span>
-          <h1 className="mt-6 text-3xl font-bold text-blanco">
-            {exito ? '¡Solicitud recibida!' : 'Recibimos todo, con un detalle'}
-          </h1>
-          <p className="mt-4 text-base leading-relaxed text-bruma">
-            {exito
-              ? `Tu solicitud quedó registrada con el código ${resultado.codigo.toUpperCase()}. Nuestro equipo la revisará y te contactará al correo ${resultado.datos.admin_correo} para activar tu cuenta de Calenzia.`
-              : 'Recibimos tu solicitud y quedó guardada, pero el registro automático falló. Nuestro equipo lo revisará manualmente y te contactará pronto.'}
-          </p>
-          <p className="mt-2 text-sm text-bruma/70">
-            Tus clientes te encontrarán en{' '}
-            <span className="text-cian">agenda.anayadev.cl/{resultado.datos.slug}</span>
-          </p>
+          <h1 className="mt-6 text-3xl font-bold text-blanco">{titulo}</h1>
+          <p className="mt-4 text-base leading-relaxed text-bruma">{detalle}</p>
+          {!fallo && (
+            <p className="mt-2 text-sm text-bruma/70">
+              Tu enlace quedó reservado:{' '}
+              <span className="text-cian">agenda.anayadev.cl/{resultado.datos.slug}</span>
+            </p>
+          )}
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <a
               href="/"
@@ -590,9 +599,10 @@ export function PaginaCompra() {
                       </span>
                     </div>
                     <p className="rounded-xl border border-blanco/10 bg-abisal/60 px-4 py-3 text-xs leading-relaxed text-bruma">
-                      Todavía no hay pago en línea: al enviar, tu solicitud
-                      llega a nuestro equipo y activamos tu cuenta después de
-                      revisarla. Te contactaremos al correo que dejaste.
+                      No pagarás ahora: al enviar, tu solicitud llega a
+                      nuestro equipo y activamos tu cuenta después de
+                      revisarla. Te contactaremos al correo y/o teléfono que
+                      dejaste.
                     </p>
                   </div>
                 )}
@@ -641,7 +651,7 @@ export function PaginaCompra() {
         )}
 
         <p className="mt-6 text-center text-xs text-bruma/60">
-          ¿Tienes dudas antes de pagar? Escríbenos a{' '}
+          ¿Tienes dudas antes de enviar? Escríbenos a{' '}
           <a href="mailto:hola@anayadev.cl" className="text-cian hover:text-turquesa">
             hola@anayadev.cl
           </a>{' '}

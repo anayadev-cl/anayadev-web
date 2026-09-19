@@ -68,14 +68,17 @@ adelante sin tocar la interfaz.
 ## Comprar Calenzia (checkout)
 
 `/comprar` es el ciclo completo: datos del negocio (slug, rubro, entidad) →
-administrador → selección de módulos → pago. Al pagar, el pedido queda
+administrador → selección de módulos → envío de la solicitud. **Todavía no
+hay pago en línea**: el cliente no paga nada al enviar; el pedido queda
 registrado en Compras y se envía al webhook de Calenzia
 (`POST /api/v1/publico/onboarding/comprar` con header `X-Webhook-Secret`,
 mismo contrato del schema `OnboardingCompraRequest` de agenda-api), que
-crea el tenant y devuelve el magic link. La URL y el secreto se configuran
-en Ajustes; sin ellos, la compra queda marcada para activación manual.
-Cuando integres la pasarela real (Webpay), el botón de pago ya cierra en
-este flujo.
+crea el tenant en estado **pendiente** (S25). El superadmin lo activa a mano
+con o sin días de prueba, o lo renueva por el mes siguiente; recién ahí se
+envía el correo de acceso al admin. La URL y el secreto se configuran en
+Ajustes; sin ellos, la solicitud queda marcada para activación manual y el
+equipo la revisa. Cuando integres la pasarela real (Webpay), el botón de
+envío ya cierra en este flujo.
 
 ## Formulario de contacto
 
