@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../../lib/api'
 import { NombreConZia } from '../../lib/marca'
 import type { Producto } from '../../lib/tipos'
@@ -31,6 +31,8 @@ export function PanelProductos() {
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState('')
   const [aviso, setAviso] = useState('')
+  const [subiendoImagen, setSubiendoImagen] = useState(false)
+  const inputImagen = useRef<HTMLInputElement>(null)
 
   const recargar = useCallback(async () => {
     try {
@@ -82,6 +84,23 @@ export function PanelProductos() {
       await recargar()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error al guardar')
+    }
+  }
+
+  async function subirImagen(archivo: File | undefined) {
+    if (!archivo) return
+    setError('')
+    setAviso('')
+    setSubiendoImagen(true)
+    try {
+      const medio = await api.medios.subir(archivo)
+      setFormulario((actual) => ({ ...actual, imagen_url: medio.url }))
+      setAviso(`Imagen "${archivo.name}" subida.`)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error al subir la imagen')
+    } finally {
+      setSubiendoImagen(false)
+      if (inputImagen.current) inputImagen.current.value = ''
     }
   }
 
@@ -222,15 +241,40 @@ export function PanelProductos() {
             />
           </Campo>
 
-          <Campo etiqueta="Imagen (URL o /media/…)">
-            <input
-              className={entradaClase}
-              placeholder="/media/abc123.png o https://…"
-              value={formulario.imagen_url ?? ''}
-              onChange={(e) =>
-                setFormulario({ ...formulario, imagen_url: e.target.value || null })
-              }
-            />
+          <Campo etiqueta="Imagen (subir archivo o pegar URL)">
+            <div className="flex flex-wrap items-center gap-3">
+              {formulario.imagen_url && (
+                <img
+                  src={formulario.imagen_url}
+                  alt="Vista previa"
+                  className="h-20 w-20 rounded-lg border border-blanco/10 bg-abisal object-contain"
+                />
+              )}
+              <div className="flex min-w-56 flex-1 items-center gap-2">
+                <input
+                  className={entradaClase}
+                  placeholder="/media/abc123.png o https://…"
+                  value={formulario.imagen_url ?? ''}
+                  onChange={(e) =>
+                    setFormulario({ ...formulario, imagen_url: e.target.value || null })
+                  }
+                />
+                <input
+                  ref={inputImagen}
+                  type="file"
+                  accept=".png,.jpg,.jpeg,.webp,.gif,.svg"
+                  className="hidden"
+                  onChange={(e) => void subirImagen(e.target.files?.[0])}
+                />
+                <Boton
+                  variante="secundario"
+                  disabled={subiendoImagen}
+                  onClick={() => inputImagen.current?.click()}
+                >
+                  {subiendoImagen ? 'Subiendo…' : 'Subir imagen'}
+                </Boton>
+              </div>
+            </div>
           </Campo>
 
           <Campo etiqueta="Enlace (solo productos activos)">

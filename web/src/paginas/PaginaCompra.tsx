@@ -19,14 +19,6 @@ const OPCIONES_EQUIPO = [
   { valor: 'mas_de_50', etiqueta: 'Más de 50', ayuda: 'Una organización' },
 ]
 
-function formatearCLP(valor: number) {
-  return new Intl.NumberFormat('es-CL', {
-    style: 'currency',
-    currency: 'CLP',
-    maximumFractionDigits: 0,
-  }).format(valor)
-}
-
 export function PaginaCompra() {
   const [necesidades, setNecesidades] = useState<NecesidadPublica[]>([])
   const [rubros, setRubros] = useState<{ codigo: string; nombre: string }[]>([])
@@ -589,22 +581,12 @@ export function PaginaCompra() {
                 </dl>
 
                 {compraPendiente && (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between rounded-2xl border border-cian/30 bg-cian/5 px-5 py-4">
-                      <span className="text-sm font-semibold text-bruma">Valor mensual</span>
-                      <span className="text-2xl font-bold texto-gradiente">
-                        {compraPendiente.total_clp > 0
-                          ? formatearCLP(compraPendiente.total_clp)
-                          : 'Sin costo por ahora'}
-                      </span>
-                    </div>
-                    <p className="rounded-xl border border-blanco/10 bg-abisal/60 px-4 py-3 text-xs leading-relaxed text-bruma">
-                      No pagarás ahora: al enviar, tu solicitud llega a
-                      nuestro equipo y activamos tu cuenta después de
-                      revisarla. Te contactaremos al correo y/o teléfono que
-                      dejaste.
-                    </p>
-                  </div>
+                  <p className="rounded-xl border border-blanco/10 bg-abisal/60 px-4 py-3 text-xs leading-relaxed text-bruma">
+                    No pagarás ahora: al enviar, tu solicitud llega a
+                    nuestro equipo y activamos tu cuenta después de
+                    revisarla. Te contactaremos al correo y/o teléfono que
+                    dejaste.
+                  </p>
                 )}
               </div>
             )}
