@@ -20,6 +20,30 @@ const CLAVES_CONOCIDAS = [
     clave: 'calenzia_api_url',
     etiqueta: 'API de Calenzia (base, ej. https://api.agenda.anayadev.cl)',
   },
+  {
+    clave: 'transferencia_banco',
+    etiqueta: 'Transferencia: banco',
+  },
+  {
+    clave: 'transferencia_titular',
+    etiqueta: 'Transferencia: titular',
+  },
+  {
+    clave: 'transferencia_rut',
+    etiqueta: 'Transferencia: RUT del titular',
+  },
+  {
+    clave: 'transferencia_tipo_cuenta',
+    etiqueta: 'Transferencia: tipo de cuenta',
+  },
+  {
+    clave: 'transferencia_numero_cuenta',
+    etiqueta: 'Transferencia: número de cuenta',
+  },
+  {
+    clave: 'transferencia_correo',
+    etiqueta: 'Transferencia: correo para el comprobante',
+  },
 ]
 
 export function PanelAjustes() {

@@ -67,6 +67,14 @@ export const api = {
     necesidades: NecesidadPublica[]
     rubros: { codigo: string; nombre: string }[]
     pais: string
+    transferencia: {
+      transferencia_banco: string
+      transferencia_titular: string
+      transferencia_rut: string
+      transferencia_tipo_cuenta: string
+      transferencia_numero_cuenta: string
+      transferencia_correo: string
+    }
   }> => (await pedir('/api/v1/publico/checkout')).json(),
 
   slugDisponible: async (

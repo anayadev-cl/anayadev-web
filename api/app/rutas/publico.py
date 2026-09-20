@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from .. import calenzia as integracion_calenzia
 from ..bd import get_sesion
 from ..config import ajustes
-from ..correo import enviar_correo_contacto
+from ..correo import enviar_correo_compra, enviar_correo_contacto
 from ..esquemas import (
     ChatbotPeticion,
     ChatbotRespuesta,
@@ -282,6 +282,18 @@ def catalogo_checkout(sesion: Session = Depends(get_sesion)):
         .all()
     )
     rubros = _rubros_para_checkout(sesion)
+    valores = {a.clave: a.valor for a in sesion.query(Ajuste).all()}
+    transferencia = {
+        clave: valores.get(clave, "").strip()
+        for clave in (
+            "transferencia_banco",
+            "transferencia_titular",
+            "transferencia_rut",
+            "transferencia_tipo_cuenta",
+            "transferencia_numero_cuenta",
+            "transferencia_correo",
+        )
+    }
     return {
         "necesidades": [
             {
@@ -299,6 +311,7 @@ def catalogo_checkout(sesion: Session = Depends(get_sesion)):
         ],
         "rubros": rubros,
         "pais": "CL",
+        "transferencia": transferencia,
     }
 
 
@@ -418,6 +431,7 @@ def crear_compra(cuerpo: CompraPeticion, sesion: Session = Depends(get_sesion)):
     sesion.add(compra)
     sesion.commit()
     sesion.refresh(compra)
+    enviar_correo_compra(compra)
     return compra
 
 

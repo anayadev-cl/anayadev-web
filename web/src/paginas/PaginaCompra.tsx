@@ -22,6 +22,14 @@ const OPCIONES_EQUIPO = [
 export function PaginaCompra() {
   const [necesidades, setNecesidades] = useState<NecesidadPublica[]>([])
   const [rubros, setRubros] = useState<{ codigo: string; nombre: string }[]>([])
+  const [transferencia, setTransferencia] = useState<{
+    transferencia_banco: string
+    transferencia_titular: string
+    transferencia_rut: string
+    transferencia_tipo_cuenta: string
+    transferencia_numero_cuenta: string
+    transferencia_correo: string
+  } | null>(null)
   const [cargando, setCargando] = useState(true)
   const [paso, setPaso] = useState(0)
 
@@ -50,6 +58,7 @@ export function PaginaCompra() {
       .then((datos) => {
         setNecesidades(datos.necesidades)
         setRubros(datos.rubros)
+        setTransferencia(datos.transferencia ?? null)
         if (datos.rubros.length > 0) setRubroCodigo(datos.rubros[0].codigo)
       })
       .catch(() => setError('No pudimos cargar el catálogo. Recarga la página.'))
@@ -158,8 +167,8 @@ export function PaginaCompra() {
       : `al correo ${resultado.datos.admin_correo}`
     const titulo = fallo ? 'Recibimos tu solicitud, con un detalle' : '¡Solicitud creada!'
     const detalle = fallo
-      ? 'No pagarás ahora y tu solicitud quedó guardada, pero el registro automático falló. Nuestro equipo lo revisará y te contactará pronto.'
-      : `Se creó tu solicitud con el código ${resultado.codigo.toUpperCase()}. No pagarás ahora: el equipo de anayadev se comunicará contigo ${contacto} para coordinar la activación de tu cuenta de Calenzia.`
+      ? 'Tu solicitud quedó guardada, pero el registro automático falló. Nuestro equipo lo revisará y te contactará pronto.'
+      : `Se creó tu solicitud con el código ${resultado.codigo.toUpperCase()}. El equipo de anayadev se comunicará contigo ${contacto} para coordinar la activación de tu cuenta de Calenzia.`
     return (
       <div className="relative min-h-screen">
         <FondoCircuito />
@@ -581,12 +590,42 @@ export function PaginaCompra() {
                 </dl>
 
                 {compraPendiente && (
-                  <p className="rounded-xl border border-blanco/10 bg-abisal/60 px-4 py-3 text-xs leading-relaxed text-bruma">
-                    No pagarás ahora: al enviar, tu solicitud llega a
-                    nuestro equipo y activamos tu cuenta después de
-                    revisarla. Te contactaremos al correo y/o teléfono que
-                    dejaste.
-                  </p>
+                  <div className="space-y-3">
+                    {transferencia && (
+                      <div className="rounded-2xl border border-cian/30 bg-cian/5 px-5 py-4">
+                        <p className="text-sm font-semibold text-blanco">
+                          Pago por transferencia bancaria
+                        </p>
+                        <dl className="mt-3 space-y-2 text-sm text-bruma">
+                          {[
+                            ['Banco', transferencia.transferencia_banco],
+                            ['Titular', transferencia.transferencia_titular],
+                            ['RUT', transferencia.transferencia_rut],
+                            ['Tipo de cuenta', transferencia.transferencia_tipo_cuenta],
+                            ['Número de cuenta', transferencia.transferencia_numero_cuenta],
+                          ].map(([clave, valor]) => (
+                            <div key={clave} className="flex justify-between gap-4">
+                              <dt className="shrink-0 text-bruma/70">{clave}</dt>
+                              <dd className="text-right font-medium text-blanco">{valor || '—'}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                        <p className="mt-3 text-xs leading-relaxed text-bruma">
+                          Transfiere el valor mensual de tu plan a esta cuenta y
+                          envía el comprobante a{' '}
+                          <span className="text-cian">
+                            {transferencia.transferencia_correo || 'hola@anayadev.cl'}
+                          </span>
+                          . Activamos tu cuenta al confirmar el pago.
+                        </p>
+                      </div>
+                    )}
+                    <p className="rounded-xl border border-blanco/10 bg-abisal/60 px-4 py-3 text-xs leading-relaxed text-bruma">
+                      Al enviar, tu solicitud llega a nuestro equipo y
+                      activamos tu cuenta después de revisarla. Te
+                      contactaremos al correo y/o teléfono que dejaste.
+                    </p>
+                  </div>
                 )}
               </div>
             )}
