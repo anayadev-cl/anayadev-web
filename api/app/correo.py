@@ -37,6 +37,7 @@ def _enviar_por_resend(asunto: str, cuerpo: str, reply_to: str | None = None) ->
         headers={
             "Authorization": f"Bearer {clave}",
             "Content-Type": "application/json",
+            "User-Agent": "anayadev-web/1.0",
         },
         method="POST",
     )
