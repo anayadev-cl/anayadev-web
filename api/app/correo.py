@@ -1,11 +1,15 @@
 """Envío de correos transaccionales del sitio.
 
-En desarrollo (sin SMTP configurado) el correo se registra en el log; en
-producción basta configurar las variables ANAYADEV_SMTP_* en el .env.
+En desarrollo (sin SMTP ni clave Resend configurados) el correo se registra
+en el log; en producción basta configurar las variables ANAYADEV_SMTP_* del
+`.env`. Si el puerto SMTP está bloqueado (ej. firewall del droplet), se usa
+la API HTTP de Resend con la clave de `ANAYADEV_SMTP_CLAVE` (claves `re_…`).
 """
 
+import json
 import logging
 import smtplib
+import urllib.request
 from email.mime.text import MIMEText
 from email.utils import formataddr
 
@@ -14,8 +18,45 @@ from .config import ajustes
 log = logging.getLogger("anayadev.correo")
 
 
+def _enviar_por_resend(asunto: str, cuerpo: str, reply_to: str | None = None) -> bool:
+    """Envía vía la API HTTP de Resend (https://resend.com/docs/api-reference/emails/send-email)."""
+    clave = (ajustes.smtp_clave or "").strip()
+    if not clave.startswith("re_"):
+        return False
+    datos: dict = {
+        "from": formataddr(("anayadev.cl", "noreply@anayadev.cl")),
+        "to": [ajustes.email_destino],
+        "subject": asunto,
+        "text": cuerpo,
+    }
+    if reply_to:
+        datos["reply_to"] = reply_to
+    peticion = urllib.request.Request(
+        "https://api.resend.com/emails",
+        data=json.dumps(datos).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {clave}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(peticion, timeout=15) as respuesta:
+            log.info(
+                "Correo enviado por Resend (%s): %s",
+                respuesta.status,
+                asunto,
+            )
+            return True
+    except Exception:
+        log.exception("No se pudo enviar el correo por Resend: %s", asunto)
+        return False
+
+
 def _enviar(asunto: str, cuerpo: str, reply_to: str | None = None) -> bool:
     if not ajustes.smtp_host:
+        if _enviar_por_resend(asunto, cuerpo, reply_to):
+            return True
         log.info("[CORREO %s] SMTP sin configurar — mensaje registrado:\n%s", asunto, cuerpo)
         return False
 
@@ -36,8 +77,8 @@ def _enviar(asunto: str, cuerpo: str, reply_to: str | None = None) -> bool:
             servidor.send_message(correo_mime)
         return True
     except Exception:
-        log.exception("No se pudo enviar el correo %s", asunto)
-        return False
+        log.exception("No se pudo enviar el correo %s por SMTP", asunto)
+        return _enviar_por_resend(asunto, cuerpo, reply_to)
 
 
 def enviar_correo_contacto(nombre: str, correo: str, mensaje: str) -> bool:
