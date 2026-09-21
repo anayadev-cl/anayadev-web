@@ -106,18 +106,21 @@ def enviar_correo_compra(compra) -> bool:
         + (f" (límite {m['limite_mensual']})" if m.get("limite_mensual") else "")
         for m in (compra.modulos or [])
     ) or "(sin módulos)"
+    total = datos.get("total_monto") or f"{compra.total_clp} CLP"
     cuerpo = (
         "Nueva solicitud de compra en anayadev.cl\n"
         "------------------------------------------\n\n"
         f"Código: {compra.codigo.upper()}\n"
         f"Negocio: {datos.get('nombre_empresa', '')}\n"
         f"Slug: agenda.anayadev.cl/{datos.get('slug', '')}\n"
+        f"País: {datos.get('pais', 'CL')}\n"
         f"Rubro: {datos.get('rubro_nombre', '')}\n"
         f"Equipo: {datos.get('equipo_personas') or '-'}\n"
         f"Admin: {datos.get('admin_nombre', '')} ({datos.get('admin_correo', '')})\n"
-        f"Teléfono: {datos.get('admin_telefono') or '-'}\n\n"
+        f"Teléfono: {datos.get('admin_telefono') or '-'}\n"
+        f"{datos.get('etiqueta_id_fiscal', 'RUT')}: {datos.get('id_fiscal') or '-'}\n\n"
         f"Módulos:\n{modulos}\n\n"
-        f"Total mensual: {compra.total_clp} CLP\n\n"
+        f"Total mensual: {total}\n\n"
         "Revisa el panel Compras del CMS para reenviarla a Calenzia o "
         "activarla manualmente.\n"
     )
@@ -130,6 +133,7 @@ def enviar_correo_cliente(compra) -> bool:
         f"- {m.get('nombre', m.get('modulo_codigo', '?'))}"
         for m in (compra.modulos or [])
     ) or "(sin módulos)"
+    total = datos.get("total_monto") or f"{compra.total_clp} CLP"
     cuerpo = (
         "¡Gracias por solicitar Calenzia!\n"
         "--------------------------------\n\n"
@@ -137,9 +141,11 @@ def enviar_correo_cliente(compra) -> bool:
         f"{datos.get('nombre_empresa', '')}.\n\n"
         "Esto es lo que quedó registrado:\n\n"
         f"Tu página: agenda.anayadev.cl/{datos.get('slug', '')}\n"
+        f"País: {datos.get('pais', 'CL')}\n"
         f"Rubro: {datos.get('rubro_nombre', '')}\n"
         f"Equipo: {datos.get('equipo_personas') or '-'}\n"
         f"Módulos solicitados:\n{modulos}\n\n"
+        f"Total mensual estimado: {total}\n\n"
         "Nuestro equipo revisará tu solicitud y te contactará a este correo "
         "para confirmar el paquete final, ajustar los límites a tu equipo y "
         "coordinar la activación y el pago. No pagas nada todavía.\n\n"

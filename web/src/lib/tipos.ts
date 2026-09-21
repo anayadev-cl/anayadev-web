@@ -9,6 +9,18 @@ export interface ItemSeccion {
   texto: string
 }
 
+export interface Pais {
+  iso: string
+  nombre: string
+  moneda: string
+  simbolo_moneda: string
+  decimales: number
+  etiqueta_id_fiscal: string
+  id_fiscal_obligatorio: boolean
+  prefijo_telefono: string
+  locale: string
+}
+
 export interface Seccion {
   id: number
   slug: string | null
@@ -118,6 +130,15 @@ export interface Compra {
     rubro_codigo: string
     rubro_nombre: string
     pais: string
+    moneda?: string
+    locale?: string
+    decimales?: number
+    simbolo_moneda?: string
+    etiqueta_id_fiscal?: string
+    prefijo_telefono?: string
+    id_fiscal?: string | null
+    total_minor?: number | null
+    total_monto?: string | null
     timezone: string
     equipo_personas: string | null
     necesidades: string[]

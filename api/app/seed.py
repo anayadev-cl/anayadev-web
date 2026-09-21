@@ -32,6 +32,8 @@ AJUSTES_INICIALES = {
     "webhook_onboarding_url": "",
     "webhook_onboarding_secreto": "",
     "calenzia_api_url": "http://localhost:8000",
+    "calenzia_paises_url": "",
+    "calenzia_precios_url": "",
     "transferencia_banco": "",
     "transferencia_titular": "",
     "transferencia_rut": "",

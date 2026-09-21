@@ -6,6 +6,7 @@ import type {
   ModuloCheckout,
   NecesidadCheckout,
   NecesidadPublica,
+  Pais,
   Producto,
   ReglaChatbot,
   RubroCheckout,
@@ -66,7 +67,7 @@ export const api = {
   checkoutCatalogo: async (): Promise<{
     necesidades: NecesidadPublica[]
     rubros: { codigo: string; nombre: string }[]
-    pais: string
+    paises: Pais[]
     transferencia: {
       transferencia_banco: string
       transferencia_titular: string
@@ -78,6 +79,13 @@ export const api = {
     modulos: { codigo: string; nombre: string; descripcion: string }[]
   }> => (await pedir('/api/v1/publico/checkout')).json(),
 
+  preciosCheckout: async (
+    pais: string,
+  ): Promise<{
+    pais: Pais
+    modulos: { modulo_codigo: string; monto_minor: number }[]
+  }> => (await pedir(`/api/v1/publico/checkout/precios?pais=${encodeURIComponent(pais)}`)).json(),
+
   slugDisponible: async (
     slug: string,
   ): Promise<{ slug: string; disponible: boolean }> =>
@@ -88,10 +96,12 @@ export const api = {
     nombre_empresa: string
     tipo_entidad: string
     rubro_codigo: string
+    pais: string
     equipo_personas?: string | null
     admin_nombre: string
     admin_correo: string
     admin_telefono?: string | null
+    id_fiscal?: string | null
     necesidades: string[]
     modulos_extra: string[]
   }): Promise<Compra> =>

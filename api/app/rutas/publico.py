@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 from sqlalchemy.orm import Session
 
 from .. import calenzia as integracion_calenzia
+from .. import paises as catalogo_paises
 from ..bd import get_sesion
 from ..config import ajustes
 from ..correo import enviar_correo_cliente, enviar_correo_compra, enviar_correo_contacto
@@ -319,6 +320,9 @@ def catalogo_checkout(sesion: Session = Depends(get_sesion)):
             {"codigo": m.codigo, "nombre": m.nombre, "descripcion": m.descripcion}
             for m in modulos
         ]
+    paises = catalogo_paises.obtener_paises(
+        (valores.get("calenzia_paises_url") or "").strip() or None
+    )
     return {
         "necesidades": [
             {
@@ -338,9 +342,42 @@ def catalogo_checkout(sesion: Session = Depends(get_sesion)):
             for n in necesidades
         ],
         "rubros": rubros,
-        "pais": "CL",
+        "paises": paises,
         "transferencia": transferencia,
         "modulos": modulos_catalogo,
+    }
+
+
+@router.get("/checkout/precios")
+def precios_checkout(pais: str, sesion: Session = Depends(get_sesion)):
+    valores = {a.clave: a.valor for a in sesion.query(Ajuste).all()}
+    paises = catalogo_paises.obtener_paises(
+        (valores.get("calenzia_paises_url") or "").strip() or None
+    )
+    pais_datos = catalogo_paises.buscar_pais(paises, pais)
+    if pais_datos is None:
+        raise HTTPException(422, "El país seleccionado no existe")
+
+    modulos = (
+        sesion.query(ModuloCheckout)
+        .filter(ModuloCheckout.activo.is_(True))
+        .order_by(ModuloCheckout.orden, ModuloCheckout.id)
+        .all()
+    )
+    precios = catalogo_paises.obtener_precios_por_pais(
+        (valores.get("calenzia_precios_url") or "").strip() or None,
+        [(m.codigo, m.precio_mensual_clp) for m in modulos],
+        pais_datos["iso"],
+    )
+    if precios is None:
+        raise HTTPException(502, "No se pudieron obtener los precios para ese país")
+
+    return {
+        "pais": pais_datos,
+        "modulos": [
+            {"modulo_codigo": codigo, "monto_minor": monto}
+            for codigo, monto in precios.items()
+        ],
     }
 
 
@@ -447,6 +484,37 @@ def crear_compra(cuerpo: CompraPeticion, sesion: Session = Depends(get_sesion)):
             }
         )
 
+    valores = {a.clave: a.valor for a in sesion.query(Ajuste).all()}
+    paises = catalogo_paises.obtener_paises(
+        (valores.get("calenzia_paises_url") or "").strip() or None
+    )
+    pais_datos = catalogo_paises.buscar_pais(paises, cuerpo.pais)
+    if pais_datos is None:
+        raise HTTPException(422, "El país seleccionado no existe")
+
+    id_fiscal = (cuerpo.id_fiscal or "").strip() or None
+    if pais_datos.get("id_fiscal_obligatorio") and not id_fiscal:
+        raise HTTPException(
+            422,
+            f"El {pais_datos.get('etiqueta_id_fiscal', 'identificador fiscal')} es obligatorio",
+        )
+
+    precios = catalogo_paises.obtener_precios_por_pais(
+        (valores.get("calenzia_precios_url") or "").strip() or None,
+        [(m["modulo_codigo"], m["precio_mensual_clp"]) for m in modulos_seleccionados],
+        pais_datos["iso"],
+    )
+    total_minor = (
+        sum(precios.get(m["modulo_codigo"], 0) for m in modulos_seleccionados)
+        if precios is not None
+        else None
+    )
+    total_monto = (
+        catalogo_paises.formatear_monto(total_minor, pais_datos)
+        if total_minor is not None
+        else None
+    )
+
     compra = Compra(
         codigo=uuid4().hex[:12],
         estado="pendiente_pago",
@@ -456,7 +524,16 @@ def crear_compra(cuerpo: CompraPeticion, sesion: Session = Depends(get_sesion)):
             "tipo_entidad": cuerpo.tipo_entidad,
             "rubro_codigo": rubro_codigo,
             "rubro_nombre": rubro["nombre"],
-            "pais": "CL",
+            "pais": pais_datos["iso"],
+            "moneda": pais_datos["moneda"],
+            "locale": pais_datos["locale"],
+            "decimales": pais_datos["decimales"],
+            "simbolo_moneda": pais_datos["simbolo_moneda"],
+            "etiqueta_id_fiscal": pais_datos["etiqueta_id_fiscal"],
+            "prefijo_telefono": pais_datos["prefijo_telefono"],
+            "id_fiscal": id_fiscal,
+            "total_minor": total_minor,
+            "total_monto": total_monto,
             "timezone": "America/Santiago",
             "equipo_personas": (cuerpo.equipo_personas or "").strip() or None,
             "necesidades": [n.strip().lower() for n in cuerpo.necesidades],

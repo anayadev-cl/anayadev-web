@@ -41,6 +41,8 @@ def construir_payload(compra) -> dict:
             "correo": datos.get("admin_correo"),
             "nombre": datos.get("admin_nombre"),
             "telefono": datos.get("admin_telefono") or None,
+            "identificador_fiscal": datos.get("id_fiscal") or None,
+            "tipo_identificador": datos.get("etiqueta_id_fiscal") or None,
         },
         "modulos": [
             {

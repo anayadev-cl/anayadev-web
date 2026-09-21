@@ -168,10 +168,12 @@ class CompraPeticion(BaseModel):
     nombre_empresa: str
     tipo_entidad: str
     rubro_codigo: str
+    pais: str = "CL"
     equipo_personas: str | None = Field(default=None, max_length=60)
     admin_nombre: str
     admin_correo: str
     admin_telefono: str | None = None
+    id_fiscal: str | None = Field(default=None, max_length=50)
     necesidades: list[str] = Field(default_factory=list)
     modulos_extra: list[str] = Field(default_factory=list)
 

@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { FondoCircuito } from '../componentes/FondoCircuito'
 import { Marca } from '../componentes/Marca'
 import { api } from '../lib/api'
-import type { Compra, NecesidadPublica } from '../lib/tipos'
+import { formatearMonto } from '../lib/paises'
+import type { Compra, NecesidadPublica, Pais } from '../lib/tipos'
 
 const PASOS = ['Tu negocio', 'Tu plan', 'Tu equipo', 'Enviar']
 
@@ -39,6 +40,10 @@ export function PaginaCompra() {
   const [necesidades, setNecesidades] = useState<NecesidadPublica[]>([])
   const [modulosCatalogo, setModulosCatalogo] = useState<ModuloCatalogo[]>([])
   const [rubros, setRubros] = useState<{ codigo: string; nombre: string }[]>([])
+  const [paises, setPaises] = useState<Pais[]>([])
+  const [paisIso, setPaisIso] = useState('CL')
+  const [precios, setPrecios] = useState<Record<string, number>>({})
+  const [preciosPais, setPreciosPais] = useState<Pais | null>(null)
   const [cargando, setCargando] = useState(true)
   const [paso, setPaso] = useState(0)
 
@@ -53,6 +58,7 @@ export function PaginaCompra() {
   const [adminNombre, setAdminNombre] = useState('')
   const [adminCorreo, setAdminCorreo] = useState('')
   const [adminTelefono, setAdminTelefono] = useState('')
+  const [idFiscal, setIdFiscal] = useState('')
 
   const [plan, setPlan] = useState<Record<string, boolean>>({})
   const [planTocado, setPlanTocado] = useState(false)
@@ -70,11 +76,37 @@ export function PaginaCompra() {
         setNecesidades(datos.necesidades)
         setRubros(datos.rubros)
         setModulosCatalogo(datos.modulos ?? [])
+        setPaises(datos.paises ?? [])
         if (datos.rubros.length > 0) setRubroCodigo(datos.rubros[0].codigo)
       })
       .catch(() => setError('No pudimos cargar el catálogo. Recarga la página.'))
       .finally(() => setCargando(false))
   }, [])
+
+  const paisActual = paises.find((p) => p.iso === paisIso) ?? null
+
+  useEffect(() => {
+    if (!paisIso) return
+    let activo = true
+    api
+      .preciosCheckout(paisIso)
+      .then((datos) => {
+        if (!activo) return
+        setPreciosPais(datos.pais)
+        setPrecios(
+          Object.fromEntries(datos.modulos.map((m) => [m.modulo_codigo, m.monto_minor])),
+        )
+      })
+      .catch(() => {
+        if (activo) {
+          setPreciosPais(null)
+          setPrecios({})
+        }
+      })
+    return () => {
+      activo = false
+    }
+  }, [paisIso])
 
   useEffect(() => {
     if (!equipo || planTocado) return
@@ -110,12 +142,23 @@ export function PaginaCompra() {
     .filter((m) => extras[m.codigo])
     .map((m) => m.codigo)
 
+  const codigosElegidos = [
+    ...necesidades
+      .filter((n) => necesidadesElegidas.includes(n.codigo))
+      .flatMap((n) => n.modulos),
+    ...extrasElegidos,
+  ]
   const nombresContratados = [
     ...necesidades
       .filter((n) => necesidadesElegidas.includes(n.codigo))
       .flatMap((n) => n.incluye),
     ...extrasDisponibles.filter((m) => extrasElegidos.includes(m.codigo)).map((m) => m.nombre),
   ]
+  const totalMinor = codigosElegidos.reduce(
+    (suma, codigo) => suma + (precios[codigo] ?? 0),
+    0,
+  )
+  const totalFormateado = formatearMonto(preciosPais, totalMinor)
 
   function generarSlug(nombre: string) {
     const candidato = nombre
@@ -143,10 +186,10 @@ export function PaginaCompra() {
       )
     }
     if (paso === 2) {
-      return (
-        adminNombre.trim().length > 0 &&
-        /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(adminCorreo.trim())
-      )
+      const correoValido = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(adminCorreo.trim())
+      const fiscalOk =
+        !paisActual?.id_fiscal_obligatorio || idFiscal.trim().length > 0
+      return adminNombre.trim().length > 0 && correoValido && fiscalOk
     }
     return true
   }
@@ -175,10 +218,12 @@ export function PaginaCompra() {
         nombre_empresa: nombreEmpresa,
         tipo_entidad: tipoEntidad,
         rubro_codigo: rubroCodigo,
+        pais: paisIso,
         equipo_personas: equipo,
         admin_nombre: adminNombre,
         admin_correo: adminCorreo,
         admin_telefono: adminTelefono || null,
+        id_fiscal: idFiscal || null,
         necesidades: necesidadesElegidas,
         modulos_extra: extrasElegidos,
       })
@@ -333,6 +378,26 @@ export function PaginaCompra() {
             {paso === 0 && (
               <div className="space-y-7">
                 <div className="space-y-5">
+                  <label className="block">
+                    <span className="mb-1.5 block text-lg font-semibold text-blanco">
+                      ¿En qué país está tu negocio?
+                    </span>
+                    <select
+                      className={entrada}
+                      value={paisIso}
+                      onChange={(e) => setPaisIso(e.target.value)}
+                    >
+                      {paises.map((pais) => (
+                        <option key={pais.iso} value={pais.iso}>
+                          {pais.nombre}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="mt-1.5 block text-xs text-bruma/60">
+                      Los precios y el formato se adaptan al país que elijas.
+                    </span>
+                  </label>
+
                   <label className="block">
                     <span className="mb-1.5 block text-lg font-semibold text-blanco">
                       ¿Cómo se llama tu negocio?
@@ -556,6 +621,13 @@ export function PaginaCompra() {
                   </div>
                 )}
 
+                <div className="flex items-center justify-between rounded-2xl border border-cian/30 bg-cian/5 px-5 py-4">
+                  <span className="text-sm font-semibold text-bruma">Total mensual</span>
+                  <span className="text-2xl font-bold texto-gradiente">
+                    {totalFormateado}
+                  </span>
+                </div>
+
                 <button
                   type="button"
                   onClick={aplicarRecomendacion}
@@ -614,14 +686,42 @@ export function PaginaCompra() {
                 </label>
                 <label className="block">
                   <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.14em] text-bruma/70">
-                    Teléfono (opcional)
+                    {paisActual?.etiqueta_id_fiscal ?? 'Identificador fiscal'}
+                    {paisActual?.id_fiscal_obligatorio ? '' : ' (opcional)'}
                   </span>
                   <input
                     className={entrada}
-                    placeholder="+56 9 1234 5678"
-                    value={adminTelefono}
-                    onChange={(e) => setAdminTelefono(e.target.value)}
+                    placeholder={
+                      paisActual?.iso === 'CL'
+                        ? 'Ej. 76.543.210-K'
+                        : `Ej. tu ${paisActual?.etiqueta_id_fiscal ?? 'ID'}`
+                    }
+                    value={idFiscal}
+                    onChange={(e) => setIdFiscal(e.target.value)}
                   />
+                  <span className="mt-1.5 block text-xs text-bruma/60">
+                    Lo usamos para la facturación de tu plan.
+                  </span>
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.14em] text-bruma/70">
+                    Teléfono (opcional)
+                  </span>
+                  <div className="flex items-center gap-2">
+                    {paisActual && (
+                      <span className="shrink-0 text-sm text-bruma/60">
+                        {paisActual.prefijo_telefono}
+                      </span>
+                    )}
+                    <input
+                      className={entrada}
+                      placeholder={
+                        paisActual?.iso === 'CL' ? '9 1234 5678' : '(555) 123-4567'
+                      }
+                      value={adminTelefono}
+                      onChange={(e) => setAdminTelefono(e.target.value)}
+                    />
+                  </div>
                 </label>
               </div>
             )}
@@ -642,6 +742,7 @@ export function PaginaCompra() {
                 <dl className="space-y-2.5 rounded-2xl bg-abisal/60 p-5 text-sm">
                   {[
                     ['Tu negocio', nombreEmpresa],
+                    ['País', paisActual?.nombre ?? paisIso],
                     ['Rubro', rubros.find((r) => r.codigo === rubroCodigo)?.nombre ?? rubroCodigo],
                     [
                       'Equipo',
@@ -668,6 +769,12 @@ export function PaginaCompra() {
                               {nombre}
                             </span>
                           ))}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between gap-4 border-t border-blanco/8 pt-2.5">
+                    <dt className="text-bruma/70">Total mensual</dt>
+                    <dd className="text-right font-semibold text-blanco">
+                      {totalFormateado}
                     </dd>
                   </div>
                 </dl>

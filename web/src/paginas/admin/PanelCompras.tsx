@@ -240,7 +240,7 @@ export function PanelCompras() {
                       Admin: <span className="text-blanco">{compra.datos.admin_nombre} · {compra.datos.admin_correo}</span>
                     </p>
                     <p>
-                      Total: <span className="text-blanco">{formatearCLP(compra.total_clp)}</span>
+                      Total: <span className="text-blanco">{compra.datos.total_monto ?? formatearCLP(compra.total_clp)}</span>
                     </p>
                   </div>
 

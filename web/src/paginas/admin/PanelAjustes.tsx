@@ -21,6 +21,14 @@ const CLAVES_CONOCIDAS = [
     etiqueta: 'API de Calenzia (base, ej. https://api.agenda.anayadev.cl)',
   },
   {
+    clave: 'calenzia_paises_url',
+    etiqueta: 'Endpoint de países de Calenzia (vacío = mock local CL/US/ES)',
+  },
+  {
+    clave: 'calenzia_precios_url',
+    etiqueta: 'Endpoint de precios por país de Calenzia (usa {pais}; vacío = mock local)',
+  },
+  {
     clave: 'transferencia_banco',
     etiqueta: 'Transferencia: banco',
   },
@@ -30,7 +38,7 @@ const CLAVES_CONOCIDAS = [
   },
   {
     clave: 'transferencia_rut',
-    etiqueta: 'Transferencia: RUT del titular',
+    etiqueta: 'Transferencia: identificador fiscal del titular',
   },
   {
     clave: 'transferencia_tipo_cuenta',
