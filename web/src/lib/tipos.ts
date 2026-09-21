@@ -99,6 +99,7 @@ export interface NecesidadPublica {
   codigo: string
   etiqueta: string
   ayuda: string
+  modulos: string[]
   incluye: string[]
 }
 
@@ -120,6 +121,7 @@ export interface Compra {
     timezone: string
     equipo_personas: string | null
     necesidades: string[]
+    modulos_extra: string[]
     admin_nombre: string
     admin_correo: string
     admin_telefono: string | null

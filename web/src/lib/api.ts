@@ -75,6 +75,7 @@ export const api = {
       transferencia_numero_cuenta: string
       transferencia_correo: string
     }
+    modulos: { codigo: string; nombre: string; descripcion: string }[]
   }> => (await pedir('/api/v1/publico/checkout')).json(),
 
   slugDisponible: async (
@@ -92,6 +93,7 @@ export const api = {
     admin_correo: string
     admin_telefono?: string | null
     necesidades: string[]
+    modulos_extra: string[]
   }): Promise<Compra> =>
     (await pedir('/api/v1/publico/compras', {
       method: 'POST',

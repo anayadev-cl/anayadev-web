@@ -173,6 +173,7 @@ class CompraPeticion(BaseModel):
     admin_correo: str
     admin_telefono: str | None = None
     necesidades: list[str] = Field(default_factory=list)
+    modulos_extra: list[str] = Field(default_factory=list)
 
 
 class CompraRespuesta(BaseModel):

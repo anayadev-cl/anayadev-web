@@ -43,6 +43,27 @@ def obtener_rubros(url_base: str) -> list[dict] | None:
         return None
 
 
+def obtener_modulos(url_base: str) -> list[dict] | None:
+    """Devuelve [{codigo, nombre, descripcion}, ...] de los módulos activos, o None si falla."""
+    try:
+        _, cuerpo = _pedir(f"{url_base.rstrip('/')}/api/v1/publico/modulos")
+        datos = json.loads(cuerpo)
+        if isinstance(datos, list):
+            return [
+                {
+                    "codigo": m.get("codigo"),
+                    "nombre": m.get("nombre"),
+                    "descripcion": m.get("descripcion"),
+                }
+                for m in datos
+                if m.get("codigo")
+            ]
+        return None
+    except Exception:
+        log.exception("No se pudieron obtener los módulos de Calenzia")
+        return None
+
+
 def slug_disponible(url_base: str, slug: str) -> bool | None:
     """True si el slug está libre, False si está ocupado, None si no se sabe.
 

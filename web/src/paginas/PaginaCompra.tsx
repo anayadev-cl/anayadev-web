@@ -4,9 +4,13 @@ import { Marca } from '../componentes/Marca'
 import { api } from '../lib/api'
 import type { Compra, NecesidadPublica } from '../lib/tipos'
 
-const PASOS = ['Tu negocio', 'Tu equipo', 'Tus necesidades', 'Enviar']
+const PASOS = ['Tu negocio', 'Tu plan', 'Tu equipo', 'Enviar']
 
-const STARTER = ['reservas_online', 'asistente_ia', 'whatsapp']
+interface ModuloCatalogo {
+  codigo: string
+  nombre: string
+  descripcion: string
+}
 
 const entrada =
   'w-full rounded-xl border border-blanco/12 bg-abisal/80 px-4 py-3 text-sm text-blanco outline-none transition-colors placeholder:text-bruma/40 focus:border-cian/50 focus:ring-1 focus:ring-cian/30'
@@ -19,17 +23,22 @@ const OPCIONES_EQUIPO = [
   { valor: 'mas_de_50', etiqueta: 'Más de 50', ayuda: 'Una organización' },
 ]
 
+const NECESIDAD_BASE = 'reservas_online'
+
+function recomendacionSegunEquipo(equipo: string): Record<string, boolean> {
+  if (equipo === 'solo_yo') {
+    return { asistente_ia: true, whatsapp: false, crecimiento: false }
+  }
+  if (equipo === '2_a_5') {
+    return { asistente_ia: true, whatsapp: true, crecimiento: false }
+  }
+  return { asistente_ia: true, whatsapp: true, crecimiento: true }
+}
+
 export function PaginaCompra() {
   const [necesidades, setNecesidades] = useState<NecesidadPublica[]>([])
+  const [modulosCatalogo, setModulosCatalogo] = useState<ModuloCatalogo[]>([])
   const [rubros, setRubros] = useState<{ codigo: string; nombre: string }[]>([])
-  const [transferencia, setTransferencia] = useState<{
-    transferencia_banco: string
-    transferencia_titular: string
-    transferencia_rut: string
-    transferencia_tipo_cuenta: string
-    transferencia_numero_cuenta: string
-    transferencia_correo: string
-  } | null>(null)
   const [cargando, setCargando] = useState(true)
   const [paso, setPaso] = useState(0)
 
@@ -45,7 +54,9 @@ export function PaginaCompra() {
   const [adminCorreo, setAdminCorreo] = useState('')
   const [adminTelefono, setAdminTelefono] = useState('')
 
-  const [seleccionados, setSeleccionados] = useState<Record<string, boolean>>({})
+  const [plan, setPlan] = useState<Record<string, boolean>>({})
+  const [planTocado, setPlanTocado] = useState(false)
+  const [extras, setExtras] = useState<Record<string, boolean>>({})
   const [compraPendiente, setCompraPendiente] = useState<Compra | null>(null)
 
   const [enviando, setEnviando] = useState(false)
@@ -58,12 +69,17 @@ export function PaginaCompra() {
       .then((datos) => {
         setNecesidades(datos.necesidades)
         setRubros(datos.rubros)
-        setTransferencia(datos.transferencia ?? null)
+        setModulosCatalogo(datos.modulos ?? [])
         if (datos.rubros.length > 0) setRubroCodigo(datos.rubros[0].codigo)
       })
       .catch(() => setError('No pudimos cargar el catálogo. Recarga la página.'))
       .finally(() => setCargando(false))
   }, [])
+
+  useEffect(() => {
+    if (!equipo || planTocado) return
+    setPlan(recomendacionSegunEquipo(equipo))
+  }, [equipo, planTocado])
 
   useEffect(() => {
     if (!slug || !slugValido()) {
@@ -79,6 +95,27 @@ export function PaginaCompra() {
     }, 500)
     return () => clearTimeout(temporizador)
   }, [slug])
+
+  const preguntas = necesidades.filter((n) => n.codigo !== NECESIDAD_BASE)
+  const codigosCubiertos = new Set(
+    necesidades.flatMap((n) => n.modulos),
+  )
+  const extrasDisponibles = modulosCatalogo.filter((m) => !codigosCubiertos.has(m.codigo))
+
+  const necesidadesElegidas = [
+    NECESIDAD_BASE,
+    ...preguntas.filter((n) => plan[n.codigo]).map((n) => n.codigo),
+  ]
+  const extrasElegidos = extrasDisponibles
+    .filter((m) => extras[m.codigo])
+    .map((m) => m.codigo)
+
+  const nombresContratados = [
+    ...necesidades
+      .filter((n) => necesidadesElegidas.includes(n.codigo))
+      .flatMap((n) => n.incluye),
+    ...extrasDisponibles.filter((m) => extrasElegidos.includes(m.codigo)).map((m) => m.nombre),
+  ]
 
   function generarSlug(nombre: string) {
     const candidato = nombre
@@ -105,16 +142,28 @@ export function PaginaCompra() {
         equipo.length > 0
       )
     }
-    if (paso === 1) {
+    if (paso === 2) {
       return (
         adminNombre.trim().length > 0 &&
         /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(adminCorreo.trim())
       )
     }
-    if (paso === 2) {
-      return Object.keys(seleccionados).length > 0
-    }
     return true
+  }
+
+  function alternarPregunta(codigo: string) {
+    setPlanTocado(true)
+    setPlan({ ...plan, [codigo]: !plan[codigo] })
+  }
+
+  function alternarExtra(codigo: string) {
+    setExtras({ ...extras, [codigo]: !extras[codigo] })
+  }
+
+  function aplicarRecomendacion() {
+    setPlanTocado(true)
+    setPlan(recomendacionSegunEquipo(equipo))
+    setExtras({})
   }
 
   async function crearPedido() {
@@ -130,7 +179,8 @@ export function PaginaCompra() {
         admin_nombre: adminNombre,
         admin_correo: adminCorreo,
         admin_telefono: adminTelefono || null,
-        necesidades: Object.keys(seleccionados),
+        necesidades: necesidadesElegidas,
+        modulos_extra: extrasElegidos,
       })
       setCompraPendiente(compra)
     } catch (e) {
@@ -155,20 +205,12 @@ export function PaginaCompra() {
   }
 
   if (resultado) {
-    // 8.54 (S25): sin pasarela de pago, el resultado NUNCA es un pago ni una
-    // activación — es una SOLICITUD creada y el equipo contacta al cliente.
-    // 'enviada' (webhook ok, tenant creado pendiente) y 'pagada' (webhook sin
-    // configurar, activación manual) muestran el mismo mensaje honesto; solo
-    // 'error_webhook' se distingue (el equipo lo revisará).
     const fallo = resultado.estado === 'error_webhook'
     const telefono = (resultado.datos.admin_telefono ?? '').trim()
-    const contacto = telefono
-      ? `al correo ${resultado.datos.admin_correo} y/o al teléfono ${telefono}`
-      : `al correo ${resultado.datos.admin_correo}`
     const titulo = fallo ? 'Recibimos tu solicitud, con un detalle' : '¡Solicitud creada!'
     const detalle = fallo
       ? 'Tu solicitud quedó guardada, pero el registro automático falló. Nuestro equipo lo revisará y te contactará pronto.'
-      : `Se creó tu solicitud con el código ${resultado.codigo.toUpperCase()}. El equipo de anayadev se comunicará contigo ${contacto} para coordinar la activación de tu cuenta de Calenzia.`
+      : `Se creó tu solicitud con el código ${resultado.codigo.toUpperCase()}. Te enviamos un correo a ${resultado.datos.admin_correo} con todo lo que quedó registrado. El equipo de anayadev revisará el paquete, ajustará los límites a tu equipo y te contactará ${telefono ? 'por teléfono o correo' : 'por correo'} para coordinar la activación.`
     return (
       <div className="relative min-h-screen">
         <FondoCircuito />
@@ -347,6 +389,10 @@ export function PaginaCompra() {
                         </button>
                       ))}
                     </div>
+                    <span className="mt-1.5 block text-xs text-bruma/60">
+                      Con esto sugerimos el plan inicial; lo ajustas en el
+                      siguiente paso.
+                    </span>
                   </div>
 
                   <label className="block">
@@ -417,6 +463,118 @@ export function PaginaCompra() {
             )}
 
             {paso === 1 && (
+              <div className="space-y-5">
+                <div>
+                  <h2 className="text-lg font-semibold text-blanco">
+                    Elige lo que necesitas hoy
+                  </h2>
+                  <p className="mt-1 text-sm text-bruma">
+                    La agenda con reservas en línea viene incluida. Cuéntanos
+                    qué más le hace sentido a tu negocio: puedes cambiarlo
+                    cuando quieras.
+                  </p>
+                </div>
+
+                <div className="space-y-3">
+                  {preguntas.map((necesidad) => {
+                    const activo = !!plan[necesidad.codigo]
+                    return (
+                      <button
+                        key={necesidad.codigo}
+                        type="button"
+                        onClick={() => alternarPregunta(necesidad.codigo)}
+                        className={`w-full cursor-pointer rounded-2xl border p-4 text-left transition-all sm:p-5 ${
+                          activo
+                            ? 'border-cian/50 bg-cian/5 shadow-[0_0_26px_-14px_rgba(0,223,240,0.6)]'
+                            : 'border-blanco/10 bg-abisal/60 hover:border-blanco/25'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-base font-semibold text-blanco">
+                              {necesidad.etiqueta}
+                            </p>
+                            <p className="mt-1 text-sm leading-relaxed text-bruma">
+                              {necesidad.ayuda}
+                            </p>
+                          </div>
+                          <span
+                            className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs font-bold ${
+                              activo
+                                ? 'border-turquesa bg-turquesa/20 text-turquesa'
+                                : 'border-blanco/25 text-transparent'
+                            }`}
+                          >
+                            ✓
+                          </span>
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+
+                {extrasDisponibles.length > 0 && (
+                  <div>
+                    <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-bruma/70">
+                      Extras (opcionales)
+                    </span>
+                    <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                      {extrasDisponibles.map((modulo) => {
+                        const activo = !!extras[modulo.codigo]
+                        return (
+                          <button
+                            key={modulo.codigo}
+                            type="button"
+                            onClick={() => alternarExtra(modulo.codigo)}
+                            className={`flex items-start gap-3 rounded-2xl border p-3.5 text-left transition-all ${
+                              activo
+                                ? 'border-violeta/50 bg-violeta/5'
+                                : 'border-blanco/10 bg-abisal/60 hover:border-blanco/25'
+                            }`}
+                          >
+                            <span
+                              className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border text-[11px] font-bold ${
+                                activo
+                                  ? 'border-violeta bg-violeta/25 text-violeta'
+                                  : 'border-blanco/25 text-transparent'
+                              }`}
+                            >
+                              ✓
+                            </span>
+                            <span>
+                              <span className="block text-sm font-semibold text-blanco">
+                                {modulo.nombre}
+                              </span>
+                              <span className="mt-0.5 block text-xs leading-relaxed text-bruma">
+                                {modulo.descripcion}
+                              </span>
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={aplicarRecomendacion}
+                  className="w-full rounded-2xl border border-dashed border-violeta/40 bg-violeta/5 px-4 py-3.5 text-sm font-semibold text-violeta transition-colors hover:bg-violeta/10"
+                >
+                  ¿No estás seguro? Te recomendamos lo esencial para tu equipo
+                </button>
+                <p className="text-xs leading-relaxed text-bruma/60">
+                  Los límites de tu plan se ajustan al tamaño de tu equipo.
+                  ¿Necesitas algo más especial?{' '}
+                  <a href="/#contacto" className="font-semibold text-cian hover:text-turquesa">
+                    Conversemos y lo armamos contigo
+                  </a>
+                  .
+                </p>
+              </div>
+            )}
+
+            {paso === 2 && (
               <div className="space-y-6">
                 <div>
                   <h2 className="text-lg font-semibold text-blanco">
@@ -450,7 +608,8 @@ export function PaginaCompra() {
                     onChange={(e) => setAdminCorreo(e.target.value)}
                   />
                   <span className="mt-1.5 block text-xs text-bruma/60">
-                    Aquí te enviaremos tu acceso, nada de spam.
+                    Aquí te enviaremos el resumen de tu solicitud y tu acceso,
+                    nada de spam.
                   </span>
                 </label>
                 <label className="block">
@@ -467,93 +626,16 @@ export function PaginaCompra() {
               </div>
             )}
 
-            {paso === 2 && (
-              <div className="space-y-4">
-                <div>
-                  <h2 className="text-lg font-semibold text-blanco">
-                    Cuéntanos qué necesitas y lo armamos
-                  </h2>
-                  <p className="mt-1 text-sm text-bruma">
-                    Responde las preguntas que te hagan sentido. Nosotros
-                    elegimos los módulos correctos para ti.
-                  </p>
-                </div>
-                <div className="space-y-3">
-                  {necesidades.map((necesidad) => {
-                    const activo = !!seleccionados[necesidad.codigo]
-                    return (
-                      <button
-                        key={necesidad.codigo}
-                        type="button"
-                        onClick={() =>
-                          setSeleccionados({
-                            ...seleccionados,
-                            [necesidad.codigo]: !activo,
-                          })
-                        }
-                        className={`w-full cursor-pointer rounded-2xl border p-4 text-left transition-all sm:p-5 ${
-                          activo
-                            ? 'border-cian/50 bg-cian/5 shadow-[0_0_26px_-14px_rgba(0,223,240,0.6)]'
-                            : 'border-blanco/10 bg-abisal/60 hover:border-blanco/25'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="text-base font-semibold text-blanco">
-                              {necesidad.etiqueta}
-                            </p>
-                            <p className="mt-1 text-sm leading-relaxed text-bruma">
-                              {necesidad.ayuda}
-                            </p>
-                            <p className="mt-2 text-[11px] text-bruma/60">
-                              Incluye: {necesidad.incluye.join(' · ') || '—'}
-                            </p>
-                          </div>
-                          <span
-                            className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs font-bold ${
-                              activo
-                                ? 'border-turquesa bg-turquesa/20 text-turquesa'
-                                : 'border-blanco/25 text-transparent'
-                            }`}
-                          >
-                            ✓
-                          </span>
-                        </div>
-                      </button>
-                    )
-                  })}
-                </div>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setSeleccionados(
-                      Object.fromEntries(
-                        STARTER.map((codigo) => [codigo, true]),
-                      ),
-                    )
-                  }
-                  className="w-full rounded-2xl border border-dashed border-violeta/40 bg-violeta/5 px-4 py-3.5 text-sm font-semibold text-violeta transition-colors hover:bg-violeta/10"
-                >
-                  ¿No estás seguro? Te recomendamos lo esencial
-                </button>
-                <p className="text-xs leading-relaxed text-bruma/60">
-                  ¿Tu equipo es más grande o necesitas algo especial?{' '}
-                  <a href="/#contacto" className="font-semibold text-cian hover:text-turquesa">
-                    Conversemos y lo armamos contigo
-                  </a>
-                  .
-                </p>
-              </div>
-            )}
-
             {paso === 3 && (
               <div className="space-y-5">
                 <div>
                   <h2 className="text-lg font-semibold text-blanco">
-                    Un último vistazo antes de activar
+                    Esto es lo que estás contratando
                   </h2>
                   <p className="mt-1 text-sm text-bruma">
-                    Si algo no calza, puedes volver atrás y ajustarlo.
+                    Si algo no calza, puedes volver atrás y ajustarlo. Nuestro
+                    equipo revisará el paquete y ajustará los límites a tu
+                    equipo antes de activar.
                   </p>
                 </div>
 
@@ -573,59 +655,30 @@ export function PaginaCompra() {
                       <dd className="text-right text-blanco">{valor}</dd>
                     </div>
                   ))}
-                  <div className="flex justify-between gap-4 border-t border-blanco/8 pt-2.5">
-                    <dt className="text-bruma/70">Elegiste</dt>
-                    <dd className="text-right text-blanco">
-                      {Object.keys(seleccionados).length === 0
+                  <div className="border-t border-blanco/8 pt-2.5">
+                    <dt className="text-bruma/70">Módulos incluidos</dt>
+                    <dd className="mt-1.5 flex flex-wrap gap-1.5 text-right">
+                      {nombresContratados.length === 0
                         ? '—'
-                        : Object.keys(seleccionados)
-                            .map(
-                              (codigo) =>
-                                necesidades.find((n) => n.codigo === codigo)?.etiqueta ??
-                                codigo,
-                            )
-                            .join(' · ')}
+                        : nombresContratados.map((nombre) => (
+                            <span
+                              key={nombre}
+                              className="rounded-md border border-cian/25 bg-cian/5 px-2 py-0.5 text-[11px] font-medium text-cian"
+                            >
+                              {nombre}
+                            </span>
+                          ))}
                     </dd>
                   </div>
                 </dl>
 
                 {compraPendiente && (
-                  <div className="space-y-3">
-                    {transferencia && (
-                      <div className="rounded-2xl border border-cian/30 bg-cian/5 px-5 py-4">
-                        <p className="text-sm font-semibold text-blanco">
-                          Pago por transferencia bancaria
-                        </p>
-                        <dl className="mt-3 space-y-2 text-sm text-bruma">
-                          {[
-                            ['Banco', transferencia.transferencia_banco],
-                            ['Titular', transferencia.transferencia_titular],
-                            ['RUT', transferencia.transferencia_rut],
-                            ['Tipo de cuenta', transferencia.transferencia_tipo_cuenta],
-                            ['Número de cuenta', transferencia.transferencia_numero_cuenta],
-                          ].map(([clave, valor]) => (
-                            <div key={clave} className="flex justify-between gap-4">
-                              <dt className="shrink-0 text-bruma/70">{clave}</dt>
-                              <dd className="text-right font-medium text-blanco">{valor || '—'}</dd>
-                            </div>
-                          ))}
-                        </dl>
-                        <p className="mt-3 text-xs leading-relaxed text-bruma">
-                          Transfiere el valor mensual de tu plan a esta cuenta y
-                          envía el comprobante a{' '}
-                          <span className="text-cian">
-                            {transferencia.transferencia_correo || 'hola@anayadev.cl'}
-                          </span>
-                          . Activamos tu cuenta al confirmar el pago.
-                        </p>
-                      </div>
-                    )}
-                    <p className="rounded-xl border border-blanco/10 bg-abisal/60 px-4 py-3 text-xs leading-relaxed text-bruma">
-                      Al enviar, tu solicitud llega a nuestro equipo y
-                      activamos tu cuenta después de revisarla. Te
-                      contactaremos al correo y/o teléfono que dejaste.
-                    </p>
-                  </div>
+                  <p className="rounded-xl border border-blanco/10 bg-abisal/60 px-4 py-3 text-xs leading-relaxed text-bruma">
+                    Al enviar, te mandamos un correo con todo lo que quedó
+                    registrado. Nuestro equipo confirma contigo el paquete
+                    final y coordina la activación y el pago. No pagas nada
+                    ahora.
+                  </p>
                 )}
               </div>
             )}
@@ -664,7 +717,7 @@ export function PaginaCompra() {
                   onClick={() => void crearPedido()}
                   className="rounded-full bg-gradient-to-r from-violeta via-electrica to-cian px-7 py-3 text-sm font-semibold text-blanco transition-all hover:shadow-[0_0_30px_-8px_rgba(0,223,240,0.6)] disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {enviando ? 'Preparando…' : 'Crear pedido →'}
+                  {enviando ? 'Preparando…' : 'Revisar solicitud →'}
                 </button>
               )}
             </div>

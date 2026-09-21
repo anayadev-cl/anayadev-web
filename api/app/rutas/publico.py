@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from .. import calenzia as integracion_calenzia
 from ..bd import get_sesion
 from ..config import ajustes
-from ..correo import enviar_correo_compra, enviar_correo_contacto
+from ..correo import enviar_correo_cliente, enviar_correo_compra, enviar_correo_contacto
 from ..esquemas import (
     ChatbotPeticion,
     ChatbotRespuesta,
@@ -294,6 +294,31 @@ def catalogo_checkout(sesion: Session = Depends(get_sesion)):
             "transferencia_correo",
         )
     }
+    url = _url_calenzia(sesion)
+    modulos_calenzia = integracion_calenzia.obtener_modulos(url) if url else None
+    if modulos_calenzia is not None:
+        disponibles = {m["codigo"] for m in modulos_calenzia}
+        modulos_catalogo = [
+            {
+                "codigo": m.codigo,
+                "nombre": m.nombre,
+                "descripcion": next(
+                    (
+                        c["descripcion"]
+                        for c in modulos_calenzia
+                        if c["codigo"] == m.codigo
+                    ),
+                    m.descripcion,
+                ),
+            }
+            for m in modulos
+            if m.codigo in disponibles
+        ]
+    else:
+        modulos_catalogo = [
+            {"codigo": m.codigo, "nombre": m.nombre, "descripcion": m.descripcion}
+            for m in modulos
+        ]
     return {
         "necesidades": [
             {
@@ -301,6 +326,9 @@ def catalogo_checkout(sesion: Session = Depends(get_sesion)):
                 "codigo": n.codigo,
                 "etiqueta": n.etiqueta,
                 "ayuda": n.ayuda,
+                "modulos": [
+                    c for c in (n.modulos or []) if c in modulos_por_codigo
+                ],
                 "incluye": [
                     modulos_por_codigo[c].nombre
                     for c in (n.modulos or [])
@@ -312,6 +340,7 @@ def catalogo_checkout(sesion: Session = Depends(get_sesion)):
         "rubros": rubros,
         "pais": "CL",
         "transferencia": transferencia,
+        "modulos": modulos_catalogo,
     }
 
 
@@ -394,6 +423,16 @@ def crear_compra(cuerpo: CompraPeticion, sesion: Session = Depends(get_sesion)):
         for codigo_modulo in necesidad.modulos or []:
             codigos_seleccionados[codigo_modulo] = None
 
+    for codigo_modulo in cuerpo.modulos_extra:
+        codigo = codigo_modulo.strip().lower()
+        if not codigo:
+            continue
+        if codigo not in modulos_existentes:
+            raise HTTPException(
+                422, f"El módulo '{codigo_modulo}' no existe o no está disponible"
+            )
+        codigos_seleccionados[codigo] = None
+
     modulos_seleccionados = []
     for codigo_modulo in codigos_seleccionados:
         modulo = modulos_existentes.get(codigo_modulo)
@@ -421,6 +460,7 @@ def crear_compra(cuerpo: CompraPeticion, sesion: Session = Depends(get_sesion)):
             "timezone": "America/Santiago",
             "equipo_personas": (cuerpo.equipo_personas or "").strip() or None,
             "necesidades": [n.strip().lower() for n in cuerpo.necesidades],
+            "modulos_extra": [m.strip().lower() for m in cuerpo.modulos_extra],
             "admin_nombre": cuerpo.admin_nombre.strip(),
             "admin_correo": cuerpo.admin_correo.strip(),
             "admin_telefono": (cuerpo.admin_telefono or "").strip() or None,
@@ -432,6 +472,7 @@ def crear_compra(cuerpo: CompraPeticion, sesion: Session = Depends(get_sesion)):
     sesion.commit()
     sesion.refresh(compra)
     enviar_correo_compra(compra)
+    enviar_correo_cliente(compra)
     return compra
 
 

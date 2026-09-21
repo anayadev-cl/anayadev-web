@@ -18,14 +18,16 @@ from .config import ajustes
 log = logging.getLogger("anayadev.correo")
 
 
-def _enviar_por_resend(asunto: str, cuerpo: str, reply_to: str | None = None) -> bool:
+def _enviar_por_resend(
+    asunto: str, cuerpo: str, destino: str, reply_to: str | None = None
+) -> bool:
     """Envía vía la API HTTP de Resend (https://resend.com/docs/api-reference/emails/send-email)."""
     clave = (ajustes.smtp_clave or "").strip()
     if not clave.startswith("re_"):
         return False
     datos: dict = {
         "from": formataddr(("anayadev.cl", "noreply@anayadev.cl")),
-        "to": [ajustes.email_destino],
+        "to": [destino],
         "subject": asunto,
         "text": cuerpo,
     }
@@ -44,8 +46,9 @@ def _enviar_por_resend(asunto: str, cuerpo: str, reply_to: str | None = None) ->
     try:
         with urllib.request.urlopen(peticion, timeout=15) as respuesta:
             log.info(
-                "Correo enviado por Resend (%s): %s",
+                "Correo enviado por Resend (%s) a %s: %s",
                 respuesta.status,
+                destino,
                 asunto,
             )
             return True
@@ -54,9 +57,12 @@ def _enviar_por_resend(asunto: str, cuerpo: str, reply_to: str | None = None) ->
         return False
 
 
-def _enviar(asunto: str, cuerpo: str, reply_to: str | None = None) -> bool:
+def _enviar(
+    asunto: str, cuerpo: str, destino: str | None = None, reply_to: str | None = None
+) -> bool:
+    destinatario = destino or ajustes.email_destino
     if not ajustes.smtp_host:
-        if _enviar_por_resend(asunto, cuerpo, reply_to):
+        if _enviar_por_resend(asunto, cuerpo, destinatario, reply_to):
             return True
         log.info("[CORREO %s] SMTP sin configurar — mensaje registrado:\n%s", asunto, cuerpo)
         return False
@@ -65,7 +71,7 @@ def _enviar(asunto: str, cuerpo: str, reply_to: str | None = None) -> bool:
     correo_mime = MIMEText(cuerpo, "plain", "utf-8")
     correo_mime["Subject"] = asunto
     correo_mime["From"] = formataddr(("anayadev.cl", remitente))
-    correo_mime["To"] = ajustes.email_destino
+    correo_mime["To"] = destinatario
     if reply_to:
         correo_mime["Reply-To"] = reply_to
 
@@ -79,7 +85,7 @@ def _enviar(asunto: str, cuerpo: str, reply_to: str | None = None) -> bool:
         return True
     except Exception:
         log.exception("No se pudo enviar el correo %s por SMTP", asunto)
-        return _enviar_por_resend(asunto, cuerpo, reply_to)
+        return _enviar_por_resend(asunto, cuerpo, destinatario, reply_to)
 
 
 def enviar_correo_contacto(nombre: str, correo: str, mensaje: str) -> bool:
@@ -116,3 +122,34 @@ def enviar_correo_compra(compra) -> bool:
         "activarla manualmente.\n"
     )
     return _enviar(f"[anayadev.cl] Nueva compra: {datos.get('nombre_empresa', '')}", cuerpo)
+
+
+def enviar_correo_cliente(compra) -> bool:
+    datos = compra.datos or {}
+    modulos = "\n".join(
+        f"- {m.get('nombre', m.get('modulo_codigo', '?'))}"
+        for m in (compra.modulos or [])
+    ) or "(sin módulos)"
+    cuerpo = (
+        "¡Gracias por solicitar Calenzia!\n"
+        "--------------------------------\n\n"
+        f"Hola {datos.get('admin_nombre', '')}: recibimos tu solicitud para "
+        f"{datos.get('nombre_empresa', '')}.\n\n"
+        "Esto es lo que quedó registrado:\n\n"
+        f"Tu página: agenda.anayadev.cl/{datos.get('slug', '')}\n"
+        f"Rubro: {datos.get('rubro_nombre', '')}\n"
+        f"Equipo: {datos.get('equipo_personas') or '-'}\n"
+        f"Módulos solicitados:\n{modulos}\n\n"
+        "Nuestro equipo revisará tu solicitud y te contactará a este correo "
+        "para confirmar el paquete final, ajustar los límites a tu equipo y "
+        "coordinar la activación y el pago. No pagas nada todavía.\n\n"
+        "Si tienes dudas, responde este correo o escríbenos a "
+        f"{ajustes.email_destino}.\n\n"
+        "— equipo anayadev\n"
+    )
+    return _enviar(
+        f"Recibimos tu solicitud de Calenzia ({datos.get('nombre_empresa', '')})",
+        cuerpo,
+        destino=datos.get("admin_correo", ""),
+        reply_to=ajustes.email_destino,
+    )
