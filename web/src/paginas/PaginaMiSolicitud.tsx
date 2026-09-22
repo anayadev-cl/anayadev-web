@@ -4,7 +4,7 @@ import { FondoCircuito } from '../componentes/FondoCircuito'
 import { Marca } from '../componentes/Marca'
 import { VistaSolicitud } from '../componentes/VistaSolicitud'
 import { api } from '../lib/api'
-import type { SolicitudLanding } from '../lib/tipos'
+import type { MetodoPagoPublico, SolicitudLanding } from '../lib/tipos'
 
 function Pantalla({
   titulo,
@@ -50,16 +50,25 @@ function Pantalla({
 export function PaginaMiSolicitud() {
   const { token = '' } = useParams()
   const [solicitud, setSolicitud] = useState<SolicitudLanding | null>(null)
+  const [metodosPago, setMetodosPago] = useState<MetodoPagoPublico[]>([])
   const [fallo, setFallo] = useState<'no_encontrada' | 'error' | null>(null)
 
   useEffect(() => {
     let activo = true
     setSolicitud(null)
+    setMetodosPago([])
     setFallo(null)
     api
       .verSolicitud(token)
-      .then((datos) => {
-        if (activo) setSolicitud(datos)
+      .then(async (datos) => {
+        if (!activo) return
+        setSolicitud(datos)
+        try {
+          const pagos = await api.pagosPublicos()
+          if (activo) setMetodosPago(pagos)
+        } catch {
+          /* sin métodos de pago, el landing muestra su propio mensaje */
+        }
       })
       .catch((e: Error & { status?: number }) => {
         if (!activo) return
@@ -90,5 +99,5 @@ export function PaginaMiSolicitud() {
   if (!solicitud) {
     return <Pantalla titulo="Cargando tu solicitud…" detalle="" />
   }
-  return <VistaSolicitud solicitud={solicitud} />
+  return <VistaSolicitud solicitud={solicitud} metodosPago={metodosPago} />
 }

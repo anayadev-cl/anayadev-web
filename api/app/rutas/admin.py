@@ -11,6 +11,8 @@ from ..esquemas import (
     LoginPeticion,
     LoginRespuesta,
     MensajeContactoRespuesta,
+    MetodoPagoAdmin,
+    MetodoPagoGuardar,
     ModuloCheckoutAdmin,
     ModuloCheckoutGuardar,
     NecesidadCheckoutAdmin,
@@ -30,6 +32,7 @@ from ..modelos import (
     Ajuste,
     Compra,
     MensajeContacto,
+    MetodoPago,
     ModuloCheckout,
     NecesidadCheckout,
     Producto,
@@ -573,6 +576,72 @@ def eliminar_necesidad_checkout(
     if necesidad is None:
         raise HTTPException(404, "Necesidad inexistente")
     sesion.delete(necesidad)
+    sesion.commit()
+
+
+# ------------------------------------------------------- métodos de pago
+
+
+TIPOS_METODO_PAGO = ("transferencia", "paypal", "otro")
+
+
+@router.get("/pagos", response_model=list[MetodoPagoAdmin])
+def listar_metodos_pago(
+    sesion: Session = Depends(get_sesion), _: Usuario = Depends(admin_actual)
+):
+    return (
+        sesion.query(MetodoPago).order_by(MetodoPago.orden, MetodoPago.id).all()
+    )
+
+
+@router.post("/pagos", response_model=MetodoPagoAdmin, status_code=201)
+def crear_metodo_pago(
+    cuerpo: MetodoPagoGuardar,
+    sesion: Session = Depends(get_sesion),
+    _: Usuario = Depends(admin_actual),
+):
+    if cuerpo.tipo not in TIPOS_METODO_PAGO:
+        raise HTTPException(422, "Tipo de método de pago inválido")
+    if not cuerpo.nombre.strip():
+        raise HTTPException(422, "El nombre del método es obligatorio")
+    metodo = MetodoPago(**cuerpo.model_dump())
+    sesion.add(metodo)
+    sesion.commit()
+    sesion.refresh(metodo)
+    return metodo
+
+
+@router.put("/pagos/{metodo_id}", response_model=MetodoPagoAdmin)
+def actualizar_metodo_pago(
+    metodo_id: int,
+    cuerpo: MetodoPagoGuardar,
+    sesion: Session = Depends(get_sesion),
+    _: Usuario = Depends(admin_actual),
+):
+    metodo = sesion.get(MetodoPago, metodo_id)
+    if metodo is None:
+        raise HTTPException(404, "Método de pago inexistente")
+    if cuerpo.tipo not in TIPOS_METODO_PAGO:
+        raise HTTPException(422, "Tipo de método de pago inválido")
+    if not cuerpo.nombre.strip():
+        raise HTTPException(422, "El nombre del método es obligatorio")
+    for campo, valor in cuerpo.model_dump().items():
+        setattr(metodo, campo, valor)
+    sesion.commit()
+    sesion.refresh(metodo)
+    return metodo
+
+
+@router.delete("/pagos/{metodo_id}", status_code=204)
+def eliminar_metodo_pago(
+    metodo_id: int,
+    sesion: Session = Depends(get_sesion),
+    _: Usuario = Depends(admin_actual),
+):
+    metodo = sesion.get(MetodoPago, metodo_id)
+    if metodo is None:
+        raise HTTPException(404, "Método de pago inexistente")
+    sesion.delete(metodo)
     sesion.commit()
 
 

@@ -9,6 +9,7 @@ from .bd import SesionLocal
 from .config import ajustes
 from .modelos import (
     Ajuste,
+    MetodoPago,
     ModuloCheckout,
     NecesidadCheckout,
     Producto,
@@ -34,12 +35,6 @@ AJUSTES_INICIALES = {
     "calenzia_api_url": "",
     "calenzia_paises_url": "",
     "calenzia_precios_url": "",
-    "transferencia_banco": "",
-    "transferencia_titular": "",
-    "transferencia_rut": "",
-    "transferencia_tipo_cuenta": "",
-    "transferencia_numero_cuenta": "",
-    "transferencia_correo": "",
 }
 
 SECCIONES_INICIALES = [
@@ -431,9 +426,54 @@ def sembrar() -> None:
         _sembrar_checkout_modulos(sesion)
         _sembrar_checkout_rubros(sesion)
         _sembrar_checkout_necesidades(sesion)
+        _migrar_metodos_pago(sesion)
         sesion.commit()
     finally:
         sesion.close()
+
+
+# Campos sueltos de transferencia del ajuste antiguo: se migran a un único
+# método del catálogo y después se eliminan (solo si el catálogo está vacío).
+CLAVES_TRANSFERENCIA_VIEJAS = (
+    ("transferencia_banco", "Banco"),
+    ("transferencia_titular", "Titular"),
+    ("transferencia_rut", "RUT"),
+    ("transferencia_tipo_cuenta", "Tipo de cuenta"),
+    ("transferencia_numero_cuenta", "Número de cuenta"),
+    ("transferencia_correo", "Correo para el comprobante"),
+)
+
+
+def _migrar_metodos_pago(sesion: Session) -> None:
+    """Migra los 6 ajustes viejos de transferencia a un registro del catálogo.
+
+    Idempotente: solo actúa si el catálogo está vacío y hay algún valor en
+    los campos viejos. Si ya existen métodos de pago, no toca nada (el
+    catálogo manda).
+    """
+    if sesion.query(MetodoPago).count() > 0:
+        return
+    existentes = {a.clave: a.valor for a in sesion.query(Ajuste).all()}
+    lineas = [
+        f"{etiqueta}: {valor}"
+        for clave, etiqueta in CLAVES_TRANSFERENCIA_VIEJAS
+        if (valor := (existentes.get(clave) or "").strip())
+    ]
+    if not lineas:
+        return
+    sesion.add(
+        MetodoPago(
+            tipo="transferencia",
+            nombre="Transferencia bancaria",
+            instrucciones_publicas="\n".join(lineas),
+            activo=True,
+            orden=0,
+        )
+    )
+    for clave, _ in CLAVES_TRANSFERENCIA_VIEJAS:
+        ajuste = sesion.query(Ajuste).filter(Ajuste.clave == clave).first()
+        if ajuste is not None:
+            sesion.delete(ajuste)
 
 
 def _sembrar_usuario(sesion: Session) -> None:

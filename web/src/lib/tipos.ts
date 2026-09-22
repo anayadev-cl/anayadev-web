@@ -133,6 +133,7 @@ export interface SolicitudLanding {
   estado: 'solicitada' | 'en_revision' | 'aprobada' | 'activa' | 'rechazada' | 'expirada'
   negocio_nombre: string
   slug: string
+  glosa?: string | null
   pais: string
   edicion: string
   nro_trabajadores: number
@@ -144,6 +145,22 @@ export interface SolicitudLanding {
   total_primera_factura?: number | null
   creado_en: string
   modulos_nombre?: Record<string, string>
+}
+
+export interface MetodoPagoPublico {
+  tipo: 'transferencia' | 'paypal' | 'otro'
+  nombre: string
+  instrucciones_publicas: string
+}
+
+export interface MetodoPagoAdmin {
+  id: number
+  tipo: 'transferencia' | 'paypal' | 'otro'
+  nombre: string
+  instrucciones_publicas: string
+  datos_privados: string | null
+  activo: boolean
+  orden: number
 }
 
 export interface SolicitudCalenzia {

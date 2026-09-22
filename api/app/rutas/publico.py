@@ -18,12 +18,14 @@ from ..esquemas import (
     CompraRespuesta,
     ContactoPeticion,
     ContactoRespuesta,
+    MetodoPagoPublico,
 )
 from ..limites import permitido
 from ..modelos import (
     Ajuste,
     Compra,
     MensajeContacto,
+    MetodoPago,
     NecesidadCheckout,
     Producto,
     RespuestaChatbot,
@@ -310,17 +312,6 @@ def catalogo_checkout(sesion: Session = Depends(get_sesion)):
         .all()
     )
     rubros = _rubros_para_checkout(sesion)
-    transferencia = {
-        clave: valores.get(clave, "").strip()
-        for clave in (
-            "transferencia_banco",
-            "transferencia_titular",
-            "transferencia_rut",
-            "transferencia_tipo_cuenta",
-            "transferencia_numero_cuenta",
-            "transferencia_correo",
-        )
-    }
     return {
         "necesidades": [
             {
@@ -341,7 +332,6 @@ def catalogo_checkout(sesion: Session = Depends(get_sesion)):
         ],
         "rubros": rubros,
         "paises": paises,
-        "transferencia": transferencia,
         "modulos": modulos_catalogo,
     }
 
@@ -367,6 +357,21 @@ def precios_checkout(pais: str, sesion: Session = Depends(get_sesion)):
             for concepto, monto in precios.items()
         ],
     }
+
+
+@router.get("/pagos", response_model=list[MetodoPagoPublico])
+def metodos_pago_publicos(sesion: Session = Depends(get_sesion)):
+    """Métodos de pago activos para el landing.
+
+    Solo `tipo`, `nombre` e `instrucciones_publicas` — `datos_privados`
+    (credenciales futuras) nunca sale de acá.
+    """
+    return (
+        sesion.query(MetodoPago)
+        .filter(MetodoPago.activo.is_(True))
+        .order_by(MetodoPago.orden, MetodoPago.id)
+        .all()
+    )
 
 
 @router.get("/onboarding/solicitud/{token}")

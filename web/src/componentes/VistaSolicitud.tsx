@@ -1,7 +1,8 @@
+import { useState } from 'react'
 import { FondoCircuito } from './FondoCircuito'
 import { Marca } from './Marca'
 import { formatearMontoMoneda } from '../lib/paises'
-import type { SolicitudLanding } from '../lib/tipos'
+import type { MetodoPagoPublico, SolicitudLanding } from '../lib/tipos'
 
 const ESTADOS_PENDIENTES = ['solicitada', 'en_revision']
 const ESTADOS_CON_PLAN = ['aprobada', 'activa']
@@ -17,6 +18,58 @@ function fechaLegible(iso: string | null | undefined): string | null {
   const fecha = new Date(iso)
   if (Number.isNaN(fecha.getTime())) return null
   return fecha.toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' })
+}
+
+function BotonCopiar({ texto, etiqueta = 'Copiar' }: { texto: string; etiqueta?: string }) {
+  const [copiado, setCopiado] = useState(false)
+  async function copiar() {
+    try {
+      await navigator.clipboard.writeText(texto)
+      setCopiado(true)
+      setTimeout(() => setCopiado(false), 2000)
+    } catch {
+      /* portapapeles no disponible */
+    }
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => void copiar()}
+      className={`shrink-0 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${
+        copiado
+          ? 'border-turquesa/60 bg-turquesa/15 text-turquesa'
+          : 'border-cian/40 text-cian hover:bg-cian/10'
+      }`}
+    >
+      {copiado ? '¡Copiado!' : etiqueta}
+    </button>
+  )
+}
+
+function BloqueGlosa({ solicitud, paraPagar }: { solicitud: SolicitudLanding; paraPagar: boolean }) {
+  if (!solicitud.glosa) return null
+  return (
+    <div
+      className={`flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 sm:px-5 ${
+        paraPagar ? 'border-turquesa/40 bg-turquesa/10' : 'border-blanco/10 bg-abisal/60'
+      }`}
+    >
+      <div className="min-w-0">
+        <p className="text-xs text-bruma/60">
+          {paraPagar ? 'Referencia de tu transferencia' : 'Tu código de solicitud'}
+        </p>
+        <p className="mt-0.5 truncate font-mono text-lg font-bold tracking-wide text-cian">
+          {solicitud.glosa}
+        </p>
+        {paraPagar && (
+          <p className="mt-0.5 text-xs leading-relaxed text-bruma">
+            Incluye este código como referencia o comentario de tu transferencia.
+          </p>
+        )}
+      </div>
+      <BotonCopiar texto={solicitud.glosa} />
+    </div>
+  )
 }
 
 function Encabezado() {
@@ -151,17 +204,37 @@ function TarjetaPlanAprobado({ solicitud }: { solicitud: SolicitudLanding }) {
   )
 }
 
-function TarjetaPagoPlaceholder() {
+function TarjetaPago({
+  solicitud,
+  metodosPago,
+}: {
+  solicitud: SolicitudLanding
+  metodosPago: MetodoPagoPublico[]
+}) {
   return (
-    <section className="rounded-3xl border border-dashed border-blanco/20 bg-abisal/40 p-6 sm:p-8">
+    <section className="rounded-3xl border border-blanco/15 bg-abisal/40 p-6 sm:p-8">
       <h2 className="text-lg font-semibold text-blanco">Cómo pagar</h2>
-      <p className="mt-2 text-sm leading-relaxed text-bruma">
-        Datos de pago — próximamente.
-      </p>
-      <p className="mt-1 text-xs leading-relaxed text-bruma/60">
-        Aquí encontrarás la información para pagar por transferencia. Nuestro
-        equipo te contactará para coordinar la activación.
-      </p>
+      <div className="mt-4 space-y-4">
+        <BloqueGlosa solicitud={solicitud} paraPagar />
+        {metodosPago.length === 0 ? (
+          <p className="text-sm leading-relaxed text-bruma">
+            Los datos de pago se publicarán pronto. Nuestro equipo te
+            contactará para coordinar la transferencia.
+          </p>
+        ) : (
+          metodosPago.map((metodo) => (
+            <div
+              key={`${metodo.tipo}-${metodo.nombre}`}
+              className="rounded-2xl border border-blanco/10 bg-abisal/60 p-4"
+            >
+              <p className="text-sm font-semibold text-blanco">{metodo.nombre}</p>
+              <pre className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-bruma">
+                {metodo.instrucciones_publicas}
+              </pre>
+            </div>
+          ))
+        )}
+      </div>
     </section>
   )
 }
@@ -184,12 +257,19 @@ function VistaPendiente({ solicitud }: { solicitud: SolicitudLanding }) {
         </p>
       </div>
       <TarjetaResumen solicitud={solicitud} />
+      {solicitud.glosa && <BloqueGlosa solicitud={solicitud} paraPagar={false} />}
       <TarjetaSugerencias solicitud={solicitud} />
     </>
   )
 }
 
-function VistaConPlan({ solicitud }: { solicitud: SolicitudLanding }) {
+function VistaConPlan({
+  solicitud,
+  metodosPago,
+}: {
+  solicitud: SolicitudLanding
+  metodosPago: MetodoPagoPublico[]
+}) {
   const activa = solicitud.estado === 'activa'
   return (
     <>
@@ -212,14 +292,14 @@ function VistaConPlan({ solicitud }: { solicitud: SolicitudLanding }) {
           ) : (
             <>
               Revisamos tu solicitud y quedó lista para activar. Abajo está el
-              total de la primera factura y, muy pronto, los datos de pago.
+              total de la primera factura y cómo pagarla.
             </>
           )}
         </p>
       </div>
       <TarjetaResumen solicitud={solicitud} />
       <TarjetaPlanAprobado solicitud={solicitud} />
-      <TarjetaPagoPlaceholder />
+      <TarjetaPago solicitud={solicitud} metodosPago={metodosPago} />
     </>
   )
 }
@@ -262,7 +342,13 @@ function VistaCerrada({ solicitud }: { solicitud: SolicitudLanding }) {
   )
 }
 
-export function VistaSolicitud({ solicitud }: { solicitud: SolicitudLanding }) {
+export function VistaSolicitud({
+  solicitud,
+  metodosPago = [],
+}: {
+  solicitud: SolicitudLanding
+  metodosPago?: MetodoPagoPublico[]
+}) {
   const pendiente = ESTADOS_PENDIENTES.includes(solicitud.estado)
   const conPlan = ESTADOS_CON_PLAN.includes(solicitud.estado)
   const cerrada = !pendiente && !conPlan
@@ -272,7 +358,7 @@ export function VistaSolicitud({ solicitud }: { solicitud: SolicitudLanding }) {
       <Encabezado />
       <main className="mx-auto max-w-2xl space-y-6 px-4 py-10 sm:px-6 sm:py-14">
         {pendiente && <VistaPendiente solicitud={solicitud} />}
-        {conPlan && <VistaConPlan solicitud={solicitud} />}
+        {conPlan && <VistaConPlan solicitud={solicitud} metodosPago={metodosPago} />}
         {cerrada && <VistaCerrada solicitud={solicitud} />}
       </main>
     </div>

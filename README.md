@@ -51,6 +51,9 @@ Desde el panel puedes:
 - **Compras**: solicitudes del checkout de Calenzia, reenvío manual al
   webhook de onboarding, y catálogos del checkout (módulos con precio y
   límite, rubros) totalmente editables.
+- **Pagos**: catálogo de métodos de pago que ve el cliente en su solicitud
+  aprobada (tipo, nombre, orden, activo, instrucciones públicas y datos
+  privados que nunca se publican).
 - **Chatbot**: reglas de palabras clave → respuesta y botones de sugerencia
   del asistente virtual.
 - **Ajustes**: correo de contacto, WhatsApp, redes, respuesta de respaldo
@@ -92,9 +95,11 @@ la pasarela real (Webpay), el botón de envío ya cierra en este flujo.
 el checkout). Consume el endpoint público de Calenzia
 `GET /api/v1/publico/onboarding/solicitud/{token}` (proxied por este API, sin
 auth: la credencial es el propio token). Según el estado muestra: revisión
-(sin montos + sugerencias del motor de reglas), plan aprobado/activo (total
-de la primera factura + placeholder de pago) o rechazada/expirada (mensaje
-sobrio). Los métodos de pago llegan en un bloque posterior.
+(sin montos, con la glosa como código de solicitud y las sugerencias del
+motor de reglas), plan aprobado/activo (total de la primera factura, métodos
+de pago activos y la glosa destacada con botón copiar) o rechazada/expirada
+(mensaje sobrio). Los métodos de pago se administran en el panel **Pagos**
+(`GET /publico/pagos` expone solo tipo, nombre e instrucciones públicas).
 
 ## Formulario de contacto
 
@@ -110,6 +115,7 @@ configura las variables `ANAYADEV_SMTP_*` del `.env`.
 - `POST /api/v1/publico/contacto` — recibe mensajes del formulario.
 - `POST /api/v1/publico/chatbot` — responde según las reglas del panel.
 - `GET /api/v1/publico/checkout` — catálogo público del checkout (módulos y rubros).
+- `GET /api/v1/publico/pagos` — métodos de pago activos (solo campos públicos).
 - `GET /api/v1/publico/onboarding/solicitud/{token}` — proxy de la solicitud del cliente (landing).
 - `POST /api/v1/publico/compras` y `POST /api/v1/publico/compras/{id}/pagar` — ciclo de compra.
 - `POST /api/v1/admin/login` — obtiene el token JWT del panel.

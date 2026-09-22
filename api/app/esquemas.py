@@ -192,3 +192,30 @@ class CompraRespuesta(BaseModel):
     respuesta_webhook: str | None
     creado_en: Any
     actualizado_en: Any
+
+
+class MetodoPagoAdmin(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    tipo: str
+    nombre: str
+    instrucciones_publicas: str
+    datos_privados: str | None
+    activo: bool
+    orden: int
+
+
+class MetodoPagoGuardar(BaseModel):
+    tipo: str
+    nombre: str
+    instrucciones_publicas: str = ""
+    datos_privados: str | None = None
+    activo: bool = True
+    orden: int = 0
+
+
+class MetodoPagoPublico(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    tipo: str
+    nombre: str
+    instrucciones_publicas: str

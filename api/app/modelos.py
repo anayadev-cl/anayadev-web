@@ -144,6 +144,26 @@ class Compra(Base):
     actualizado_en = Column(DateTime, default=ahora_utc, onupdate=ahora_utc)
 
 
+class MetodoPago(Base):
+    """Método de pago del catálogo que el cliente ve en el landing.
+
+    `instrucciones_publicas` es lo ÚNICO que se expone en el endpoint
+    público: texto libre (banco, cuenta, titular, RUT, link/correo de
+    PayPal…). `datos_privados` existe para credenciales futuras (claves de
+    API, etc.) y NUNCA sale del admin.
+    """
+
+    __tablename__ = "metodos_pago"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tipo = Column(String(30), default="otro")
+    nombre = Column(String(200))
+    instrucciones_publicas = Column(Text, default="")
+    datos_privados = Column(Text, nullable=True)
+    activo = Column(Boolean, default=True)
+    orden = Column(Integer, default=0)
+
+
 class Usuario(Base):
     """Usuario del panel admin (uno solo por defecto)."""
 
