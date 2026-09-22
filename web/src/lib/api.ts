@@ -11,6 +11,7 @@ import type {
   ReglaChatbot,
   RubroCheckout,
   Seccion,
+  SolicitudLanding,
 } from './tipos'
 
 const BASE = import.meta.env.VITE_API_URL ?? ''
@@ -37,7 +38,9 @@ async function pedir(ruta: string, opciones: RequestInit = {}): Promise<Response
     const cuerpo = await respuesta.json().catch(() => null)
     const detalle =
       typeof cuerpo?.detail === 'string' ? cuerpo.detail : `Error ${respuesta.status}`
-    throw new Error(detalle)
+    const error = new Error(detalle) as Error & { status?: number }
+    error.status = respuesta.status
+    throw error
   }
   return respuesta
 }
@@ -115,6 +118,11 @@ export const api = {
 
   enviarSolicitud: async (id: number): Promise<Compra> =>
     (await pedir(`/api/v1/publico/compras/${id}/pagar`, { method: 'POST' })).json(),
+
+  verSolicitud: async (token: string): Promise<SolicitudLanding> =>
+    (
+      await pedir(`/api/v1/publico/onboarding/solicitud/${encodeURIComponent(token)}`)
+    ).json(),
 
   login: async (usuario: string, clave: string) => {
     const respuesta = await pedir('/api/v1/admin/login', {

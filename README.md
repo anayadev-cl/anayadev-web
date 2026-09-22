@@ -85,6 +85,17 @@ se deriva de la API de Calenzia si queda vacía); sin ellos, la solicitud
 queda marcada para activación manual y el equipo la revisa. Cuando integres
 la pasarela real (Webpay), el botón de envío ya cierra en este flujo.
 
+## Seguimiento de la solicitud (landing)
+
+`/mi-solicitud/{token}` es la vista pública de solo lectura de la solicitud
+(la misma pantalla a la que apunta el enlace «ver mi solicitud» al terminar
+el checkout). Consume el endpoint público de Calenzia
+`GET /api/v1/publico/onboarding/solicitud/{token}` (proxied por este API, sin
+auth: la credencial es el propio token). Según el estado muestra: revisión
+(sin montos + sugerencias del motor de reglas), plan aprobado/activo (total
+de la primera factura + placeholder de pago) o rechazada/expirada (mensaje
+sobrio). Los métodos de pago llegan en un bloque posterior.
+
 ## Formulario de contacto
 
 El formulario de la sección "Conversemos" guarda cada mensaje en la base de
@@ -99,6 +110,7 @@ configura las variables `ANAYADEV_SMTP_*` del `.env`.
 - `POST /api/v1/publico/contacto` — recibe mensajes del formulario.
 - `POST /api/v1/publico/chatbot` — responde según las reglas del panel.
 - `GET /api/v1/publico/checkout` — catálogo público del checkout (módulos y rubros).
+- `GET /api/v1/publico/onboarding/solicitud/{token}` — proxy de la solicitud del cliente (landing).
 - `POST /api/v1/publico/compras` y `POST /api/v1/publico/compras/{id}/pagar` — ciclo de compra.
 - `POST /api/v1/admin/login` — obtiene el token JWT del panel.
 - CRUD bajo `/api/v1/admin/*` (secciones, productos, mensajes, compras,

@@ -129,6 +129,23 @@ export interface SugerenciaCalenzia {
   aceptada: boolean | null
 }
 
+export interface SolicitudLanding {
+  estado: 'solicitada' | 'en_revision' | 'aprobada' | 'activa' | 'rechazada' | 'expirada'
+  negocio_nombre: string
+  slug: string
+  pais: string
+  edicion: string
+  nro_trabajadores: number
+  modulos: string[]
+  sugerencias: SugerenciaCalenzia[]
+  moneda?: string | null
+  simbolo_moneda?: string | null
+  decimales?: number | null
+  total_primera_factura?: number | null
+  creado_en: string
+  modulos_nombre?: Record<string, string>
+}
+
 export interface SolicitudCalenzia {
   token: string | null
   solicitud_id: string | null

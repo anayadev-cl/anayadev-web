@@ -80,3 +80,27 @@ def slug_disponible(url_base: str, slug: str) -> bool | None:
     except Exception:
         return None
     return False if codigo == 200 else None
+
+
+def obtener_solicitud_publica(url_base: str, token: str) -> tuple[int, dict | None]:
+    """GET /publico/onboarding/solicitud/{token}: la solicitud vista por su dueño.
+
+    Devuelve (codigo_http, dict) con el JSON tal cual lo entrega Calenzia
+    (contrato 8.58, sin transformarlo): estado, negocio_nombre, slug, pais,
+    edicion, nro_trabajadores, modulos (códigos), sugerencias, creado_en y,
+    solo si está aprobada/activa, moneda/simbolo_moneda/decimales/
+    total_primera_factura. Un token inexistente viaja como (404, None); un
+    error de red o una respuesta inesperada, como (0, None).
+    """
+    destino = f"{url_base.rstrip('/')}/api/v1/publico/onboarding/solicitud/{token}"
+    try:
+        _, cuerpo = _pedir(destino)
+        datos = json.loads(cuerpo)
+        if isinstance(datos, dict):
+            return 200, datos
+        return 0, None
+    except urllib.error.HTTPError as exc:
+        return exc.code, None
+    except Exception:
+        log.exception("No se pudo consultar la solicitud de onboarding")
+        return 0, None

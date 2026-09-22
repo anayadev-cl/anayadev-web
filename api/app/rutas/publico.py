@@ -369,6 +369,34 @@ def precios_checkout(pais: str, sesion: Session = Depends(get_sesion)):
     }
 
 
+@router.get("/onboarding/solicitud/{token}")
+def ver_solicitud_publica(token: str, sesion: Session = Depends(get_sesion)):
+    """La solicitud de compra vista por su dueño, por el token del landing.
+
+    Proxy de solo lectura del endpoint público de Calenzia
+    `GET /publico/onboarding/solicitud/{token}` (contrato 8.58, sin auth:
+    la credencial es el propio token). Se devuelve el JSON de Calenzia sin
+    transformarlo, enriquecido con `modulos_nombre` (código → nombre del
+    catálogo de Calenzia) para que el landing muestre los módulos legibles;
+    si un código no está en el catálogo, el landing cae al código.
+    """
+    token_limpio = token.strip()
+    if not token_limpio or len(token_limpio) > 100:
+        raise HTTPException(404, "No encontramos ninguna solicitud con ese enlace.")
+    url = _url_calenzia(sesion)
+    if not url:
+        raise HTTPException(502, "No pudimos consultar tu solicitud. Intenta más tarde.")
+    codigo, solicitud = integracion_calenzia.obtener_solicitud_publica(url, token_limpio)
+    if codigo == 404:
+        raise HTTPException(404, "No encontramos ninguna solicitud con ese enlace.")
+    if solicitud is None:
+        raise HTTPException(502, "No pudimos consultar tu solicitud. Intenta más tarde.")
+
+    modulos_calenzia = integracion_calenzia.obtener_modulos(url)
+    nombres = {m["codigo"]: m["nombre"] for m in (modulos_calenzia or [])}
+    return {**solicitud, "modulos_nombre": nombres}
+
+
 _PATRON_SLUG = re.compile(r"^[a-z][a-z0-9]*(-[a-z0-9]+)*$")
 
 _EDICIONES_VALIDAS = ("comunicacion", "con_ia")

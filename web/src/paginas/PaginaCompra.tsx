@@ -359,6 +359,17 @@ export function PaginaCompra() {
               <span className="text-cian">agenda.anayadev.cl/{resultado.datos.slug}</span>
             </p>
           )}
+          {!fallo && resultado.datos.calenzia?.token && (
+            <p className="mt-2 text-sm text-bruma/70">
+              Guarda el enlace para seguir tu solicitud:{' '}
+              <a
+                href={`/mi-solicitud/${resultado.datos.calenzia.token}`}
+                className="font-semibold text-cian hover:text-turquesa"
+              >
+                ver mi solicitud
+              </a>
+            </p>
+          )}
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <a
               href="/"
