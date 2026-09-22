@@ -10,7 +10,7 @@ const CLAVES_CONOCIDAS = [
   { clave: 'chatbot_fallback', etiqueta: 'Chatbot: respuesta cuando no entiende' },
   {
     clave: 'webhook_onboarding_url',
-    etiqueta: 'Webhook de onboarding (URL completa de Calenzia)',
+    etiqueta: 'Webhook de onboarding (URL completa; vacío = derivarla de la API de Calenzia)',
   },
   {
     clave: 'webhook_onboarding_secreto',
@@ -18,15 +18,15 @@ const CLAVES_CONOCIDAS = [
   },
   {
     clave: 'calenzia_api_url',
-    etiqueta: 'API de Calenzia (base, ej. https://api.agenda.anayadev.cl)',
+    etiqueta: 'API de Calenzia (base; vacío = usar ANAYADEV_CALENZIA_API_URL)',
   },
   {
     clave: 'calenzia_paises_url',
-    etiqueta: 'Endpoint de países de Calenzia (vacío = mock local CL/US/ES)',
+    etiqueta: 'Endpoint de países de Calenzia (vacío = usar el valor por defecto del servidor)',
   },
   {
     clave: 'calenzia_precios_url',
-    etiqueta: 'Endpoint de precios por país de Calenzia (usa {pais}; vacío = mock local)',
+    etiqueta: 'Endpoint de precios por país de Calenzia (usa {pais}; vacío = valor por defecto del servidor)',
   },
   {
     clave: 'transferencia_banco',

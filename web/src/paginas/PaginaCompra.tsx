@@ -17,11 +17,11 @@ const entrada =
   'w-full rounded-xl border border-blanco/12 bg-abisal/80 px-4 py-3 text-sm text-blanco outline-none transition-colors placeholder:text-bruma/40 focus:border-cian/50 focus:ring-1 focus:ring-cian/30'
 
 const OPCIONES_EQUIPO = [
-  { valor: 'solo_yo', etiqueta: 'Solo yo', ayuda: 'Trabajo por mi cuenta' },
-  { valor: '2_a_5', etiqueta: '2 a 5', ayuda: 'Un equipo pequeño' },
-  { valor: '6_a_15', etiqueta: '6 a 15', ayuda: 'Varios profesionales' },
-  { valor: '16_a_50', etiqueta: '16 a 50', ayuda: 'Un equipo grande' },
-  { valor: 'mas_de_50', etiqueta: 'Más de 50', ayuda: 'Una organización' },
+  { valor: 'solo_yo', etiqueta: 'Solo yo', ayuda: 'Trabajo por mi cuenta', nro: 1 },
+  { valor: '2_a_5', etiqueta: '2 a 5', ayuda: 'Un equipo pequeño', nro: 5 },
+  { valor: '6_a_15', etiqueta: '6 a 15', ayuda: 'Varios profesionales', nro: 15 },
+  { valor: '16_a_50', etiqueta: '16 a 50', ayuda: 'Un equipo grande', nro: 50 },
+  { valor: 'mas_de_50', etiqueta: 'Más de 50', ayuda: 'Una organización', nro: 51 },
 ]
 
 const NECESIDAD_BASE = 'reservas_online'
@@ -213,6 +213,7 @@ export function PaginaCompra() {
     setError('')
     setEnviando(true)
     try {
+      const opcionEquipo = OPCIONES_EQUIPO.find((o) => o.valor === equipo)
       const compra = await api.crearCompra({
         slug,
         nombre_empresa: nombreEmpresa,
@@ -226,6 +227,9 @@ export function PaginaCompra() {
         id_fiscal: idFiscal || null,
         necesidades: necesidadesElegidas,
         modulos_extra: extrasElegidos,
+        edicion: plan['asistente_ia'] ? 'con_ia' : 'comunicacion',
+        nro_trabajadores: opcionEquipo?.nro ?? 1,
+        respuestas: {},
       })
       setCompraPendiente(compra)
     } catch (e) {

@@ -119,6 +119,26 @@ export interface ModuloSeleccionado {
   modulo_codigo: string
 }
 
+export interface SugerenciaCalenzia {
+  codigo: string
+  tipo: 'edicion' | 'modulo'
+  objetivo: string
+  titulo: string
+  motivo: string
+  origen: 'regla' | 'superadmin'
+  aceptada: boolean | null
+}
+
+export interface SolicitudCalenzia {
+  token: string | null
+  solicitud_id: string | null
+  estado: string | null
+  slug: string | null
+  ya_existia: boolean | null
+  sugerencias: SugerenciaCalenzia[] | null
+  creado_en: string | null
+}
+
 export interface Compra {
   id: number
   codigo: string
@@ -146,6 +166,10 @@ export interface Compra {
     admin_nombre: string
     admin_correo: string
     admin_telefono: string | null
+    edicion?: 'comunicacion' | 'con_ia'
+    nro_trabajadores?: number
+    respuestas?: Record<string, unknown>
+    calenzia?: SolicitudCalenzia | null
   }
   modulos: {
     modulo_codigo: string

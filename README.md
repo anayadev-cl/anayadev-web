@@ -72,13 +72,18 @@ administrador → selección de módulos → envío de la solicitud. **Todavía 
 hay pago en línea**: el cliente no paga nada al enviar; el pedido queda
 registrado en Compras y se envía al webhook de Calenzia
 (`POST /api/v1/publico/onboarding/comprar` con header `X-Webhook-Secret`,
-mismo contrato del schema `OnboardingCompraRequest` de agenda-api), que
-crea el tenant en estado **pendiente** (S25). El superadmin lo activa a mano
-con o sin días de prueba, o lo renueva por el mes siguiente; recién ahí se
-envía el correo de acceso al admin. La URL y el secreto se configuran en
-Ajustes; sin ellos, la solicitud queda marcada para activación manual y el
-equipo la revisa. Cuando integres la pasarela real (Webpay), el botón de
-envío ya cierra en este flujo.
+contrato 8.58 del schema `OnboardingCompraRequest` de agenda-api:
+`negocio`, `contacto`, `edicion`, `nro_trabajadores`, `modulos` como códigos
+y `respuestas`). Calenzia crea la **solicitud** en estado `solicitada` y
+responde con `solicitud_id`, `token` (credencial del landing
+`/mi-solicitud/{token}`) y `sugerencias`, que quedan guardados en la compra;
+el superadmin de Calenzia la revisa, aprueba y registra el pago (S29).
+Países, precios, rubros y módulos del checkout se toman EN VIVO de la API
+pública de Calenzia (settings `ANAYADEV_CALENZIA_*`, sobrescribibles desde
+Ajustes). La URL y el secreto del webhook se configuran en Ajustes (la URL
+se deriva de la API de Calenzia si queda vacía); sin ellos, la solicitud
+queda marcada para activación manual y el equipo la revisa. Cuando integres
+la pasarela real (Webpay), el botón de envío ya cierra en este flujo.
 
 ## Formulario de contacto
 

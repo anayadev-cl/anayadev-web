@@ -20,6 +20,9 @@ class Ajustes(BaseSettings):
     smtp_usuario: str = ""
     smtp_clave: str = ""
     smtp_tls: bool = True
+    calenzia_api_url: str = "https://api.agenda.anayadev.cl"
+    calenzia_paises_url: str = "https://api.agenda.anayadev.cl/api/v1/publico/paises"
+    calenzia_precios_url: str = "https://api.agenda.anayadev.cl/api/v1/publico/precios?pais={pais}"
 
     class Config:
         env_file = str(BASE_DIR / ".env")

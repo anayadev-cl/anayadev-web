@@ -104,6 +104,9 @@ export const api = {
     id_fiscal?: string | null
     necesidades: string[]
     modulos_extra: string[]
+    edicion: 'comunicacion' | 'con_ia'
+    nro_trabajadores: number
+    respuestas?: Record<string, unknown>
   }): Promise<Compra> =>
     (await pedir('/api/v1/publico/compras', {
       method: 'POST',

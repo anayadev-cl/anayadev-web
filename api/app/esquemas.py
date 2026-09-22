@@ -176,6 +176,9 @@ class CompraPeticion(BaseModel):
     id_fiscal: str | None = Field(default=None, max_length=50)
     necesidades: list[str] = Field(default_factory=list)
     modulos_extra: list[str] = Field(default_factory=list)
+    edicion: str = "comunicacion"
+    nro_trabajadores: int | None = Field(default=None, ge=1, le=5000)
+    respuestas: dict[str, Any] = Field(default_factory=dict)
 
 
 class CompraRespuesta(BaseModel):

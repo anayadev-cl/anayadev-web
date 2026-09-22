@@ -31,7 +31,7 @@ AJUSTES_INICIALES = {
     ),
     "webhook_onboarding_url": "",
     "webhook_onboarding_secreto": "",
-    "calenzia_api_url": "http://localhost:8000",
+    "calenzia_api_url": "",
     "calenzia_paises_url": "",
     "calenzia_precios_url": "",
     "transferencia_banco": "",
@@ -319,18 +319,14 @@ RESPUESTAS_CHATBOT_INICIALES = [
 MODULOS_CHECKOUT_INICIALES = [
     ("agenda", "Agenda", "Agenda y calendario de citas para tu equipo.", 0, None),
     ("agendamiento_publico", "Agendamiento público", "Tus clientes reservan en línea desde tu propia página.", 0, None),
-    ("ia", "Asistente IA", "Agente de IA que agienda, conversa y responde por ti.", 0, 300),
     ("whatsapp", "Recordatorios WhatsApp", "Recordatorios y conversaciones por WhatsApp.", 0, 500),
     ("campanas", "Campañas", "Marketing y comunicaciones masivas a tus clientes.", 0, 2000),
     ("presupuestos", "Presupuestos", "Envía presupuestos y haz seguimiento.", 0, None),
     ("inventario", "Inventario", "Controla productos y stock.", 0, None),
     ("reportes_avanzados", "Reportes avanzados", "Métricas y reportes del negocio.", 0, None),
     ("encuestas", "Encuestas", "Encuestas de satisfacción a tus clientes.", 0, None),
-    ("facturacion", "Facturación", "Boletas y documentos de venta.", 0, None),
-    ("fichas_clinicas", "Fichas clínicas", "Registro clínico de tus pacientes.", 0, None),
-    ("portal_familias", "Portal de familias", "Portal para que familias sigan el avance.", 0, None),
-    ("evaluaciones", "Evaluaciones del desarrollo", "Seguimiento y evaluaciones.", 0, None),
     ("branding_avanzado", "Branding avanzado", "Personaliza la plataforma con tu marca a fondo.", 0, None),
+    ("sobrecupos", "Sobrecupos", "Agendar fuera del horario estricto.", 0, None),
 ]
 
 RUBROS_CHECKOUT_INICIALES = [
@@ -351,7 +347,7 @@ NECESIDADES_CHECKOUT_INICIALES = [
         "asistente_ia",
         "¿Quieres que una IA atienda y agende por ti?",
         "Responde consultas y agenda citas incluso fuera de horario.",
-        ["ia"],
+        [],
     ),
     (
         "whatsapp",
