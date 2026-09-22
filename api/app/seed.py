@@ -447,9 +447,10 @@ CLAVES_TRANSFERENCIA_VIEJAS = (
 def _migrar_metodos_pago(sesion: Session) -> None:
     """Migra los 6 ajustes viejos de transferencia a un registro del catálogo.
 
-    Idempotente: solo actúa si el catálogo está vacío y hay algún valor en
-    los campos viejos. Si ya existen métodos de pago, no toca nada (el
-    catálogo manda).
+    Idempotente: solo actúa si el catálogo está vacío. Crea el método
+    únicamente si alguno de los campos viejos tenía contenido (no se inventa
+    un método vacío que el landing le mostraría a clientes reales); las 6
+    claves viejas se eliminan SIEMPRE — quedaron reemplazadas por el catálogo.
     """
     if sesion.query(MetodoPago).count() > 0:
         return
@@ -459,17 +460,16 @@ def _migrar_metodos_pago(sesion: Session) -> None:
         for clave, etiqueta in CLAVES_TRANSFERENCIA_VIEJAS
         if (valor := (existentes.get(clave) or "").strip())
     ]
-    if not lineas:
-        return
-    sesion.add(
-        MetodoPago(
-            tipo="transferencia",
-            nombre="Transferencia bancaria",
-            instrucciones_publicas="\n".join(lineas),
-            activo=True,
-            orden=0,
+    if lineas:
+        sesion.add(
+            MetodoPago(
+                tipo="transferencia",
+                nombre="Transferencia bancaria",
+                instrucciones_publicas="\n".join(lineas),
+                activo=True,
+                orden=0,
+            )
         )
-    )
     for clave, _ in CLAVES_TRANSFERENCIA_VIEJAS:
         ajuste = sesion.query(Ajuste).filter(Ajuste.clave == clave).first()
         if ajuste is not None:
