@@ -193,6 +193,13 @@ export function PaginaCompra() {
     return () => clearTimeout(temporizador)
   }, [slug])
 
+  // Al avanzar o retroceder de paso, los datos quedan en el estado (nada se
+  // pierde) y la vista vuelve arriba del formulario para continuar sin
+  // perder el hilo.
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'auto' })
+  }, [paso])
+
   const preguntas = necesidades.filter(
     (n) => n.codigo !== NECESIDAD_BASE && n.codigo !== NECESIDAD_IA,
   )
