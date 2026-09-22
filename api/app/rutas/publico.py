@@ -18,13 +18,14 @@ from ..esquemas import (
     CompraRespuesta,
     ContactoPeticion,
     ContactoRespuesta,
+    MetodoPagoPublico,
 )
 from ..limites import permitido
 from ..modelos import (
     Ajuste,
     Compra,
     MensajeContacto,
-    ModuloCheckout,
+    MetodoPago,
     NecesidadCheckout,
     Producto,
     RespuestaChatbot,
@@ -41,7 +42,19 @@ EXTENSIONES_PERMITIDAS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".pd
 def _url_calenzia(sesion: Session) -> str | None:
     ajuste = sesion.query(Ajuste).filter(Ajuste.clave == "calenzia_api_url").first()
     valor = (ajuste.valor if ajuste else "").strip()
-    return valor or None
+    return valor or (ajustes.calenzia_api_url or "").strip() or None
+
+
+def _url_paises(valores: dict[str, str]) -> str | None:
+    return (valores.get("calenzia_paises_url") or "").strip() or (
+        ajustes.calenzia_paises_url or ""
+    ).strip() or None
+
+
+def _url_precios(valores: dict[str, str]) -> str | None:
+    return (valores.get("calenzia_precios_url") or "").strip() or (
+        ajustes.calenzia_precios_url or ""
+    ).strip() or None
 
 
 def _rubros_para_checkout(sesion: Session) -> list[dict]:
@@ -269,13 +282,29 @@ async def chatbot_con_adjunto(
 
 @router.get("/checkout")
 def catalogo_checkout(sesion: Session = Depends(get_sesion)):
-    modulos = (
-        sesion.query(ModuloCheckout)
-        .filter(ModuloCheckout.activo.is_(True))
-        .order_by(ModuloCheckout.orden, ModuloCheckout.id)
-        .all()
+    valores = {a.clave: a.valor for a in sesion.query(Ajuste).all()}
+    url = _url_calenzia(sesion)
+    paises = catalogo_paises.obtener_paises(_url_paises(valores))
+
+    modulos_calenzia = integracion_calenzia.obtener_modulos(url) if url else None
+    iso_referencia = paises[0]["iso"] if paises else "CL"
+    precios = catalogo_paises.obtener_precios_por_pais(
+        _url_precios(valores), iso_referencia
     )
-    modulos_por_codigo = {m.codigo: m for m in modulos}
+    disponibles = {m["codigo"]: m for m in (modulos_calenzia or [])}
+    if modulos_calenzia is not None and precios is not None:
+        # Solo conceptos contratables: módulos de Calenzia que tengan precio
+        # (las ediciones `comunicacion`/`con_ia` no son módulos y no aplican).
+        modulos_calenzia = [m for m in modulos_calenzia if m["codigo"] in precios]
+    modulos_catalogo = [
+        {
+            "codigo": m["codigo"],
+            "nombre": m["nombre"],
+            "descripcion": m.get("descripcion") or "",
+        }
+        for m in (modulos_calenzia or [])
+    ]
+
     necesidades = (
         sesion.query(NecesidadCheckout)
         .filter(NecesidadCheckout.activo.is_(True))
@@ -283,46 +312,6 @@ def catalogo_checkout(sesion: Session = Depends(get_sesion)):
         .all()
     )
     rubros = _rubros_para_checkout(sesion)
-    valores = {a.clave: a.valor for a in sesion.query(Ajuste).all()}
-    transferencia = {
-        clave: valores.get(clave, "").strip()
-        for clave in (
-            "transferencia_banco",
-            "transferencia_titular",
-            "transferencia_rut",
-            "transferencia_tipo_cuenta",
-            "transferencia_numero_cuenta",
-            "transferencia_correo",
-        )
-    }
-    url = _url_calenzia(sesion)
-    modulos_calenzia = integracion_calenzia.obtener_modulos(url) if url else None
-    if modulos_calenzia is not None:
-        disponibles = {m["codigo"] for m in modulos_calenzia}
-        modulos_catalogo = [
-            {
-                "codigo": m.codigo,
-                "nombre": m.nombre,
-                "descripcion": next(
-                    (
-                        c["descripcion"]
-                        for c in modulos_calenzia
-                        if c["codigo"] == m.codigo
-                    ),
-                    m.descripcion,
-                ),
-            }
-            for m in modulos
-            if m.codigo in disponibles
-        ]
-    else:
-        modulos_catalogo = [
-            {"codigo": m.codigo, "nombre": m.nombre, "descripcion": m.descripcion}
-            for m in modulos
-        ]
-    paises = catalogo_paises.obtener_paises(
-        (valores.get("calenzia_paises_url") or "").strip() or None
-    )
     return {
         "necesidades": [
             {
@@ -331,19 +320,18 @@ def catalogo_checkout(sesion: Session = Depends(get_sesion)):
                 "etiqueta": n.etiqueta,
                 "ayuda": n.ayuda,
                 "modulos": [
-                    c for c in (n.modulos or []) if c in modulos_por_codigo
+                    c for c in (n.modulos or []) if c in disponibles
                 ],
                 "incluye": [
-                    modulos_por_codigo[c].nombre
+                    disponibles[c]["nombre"]
                     for c in (n.modulos or [])
-                    if c in modulos_por_codigo
+                    if c in disponibles
                 ],
             }
             for n in necesidades
         ],
         "rubros": rubros,
         "paises": paises,
-        "transferencia": transferencia,
         "modulos": modulos_catalogo,
     }
 
@@ -351,23 +339,13 @@ def catalogo_checkout(sesion: Session = Depends(get_sesion)):
 @router.get("/checkout/precios")
 def precios_checkout(pais: str, sesion: Session = Depends(get_sesion)):
     valores = {a.clave: a.valor for a in sesion.query(Ajuste).all()}
-    paises = catalogo_paises.obtener_paises(
-        (valores.get("calenzia_paises_url") or "").strip() or None
-    )
+    paises = catalogo_paises.obtener_paises(_url_paises(valores))
     pais_datos = catalogo_paises.buscar_pais(paises, pais)
     if pais_datos is None:
         raise HTTPException(422, "El país seleccionado no existe")
 
-    modulos = (
-        sesion.query(ModuloCheckout)
-        .filter(ModuloCheckout.activo.is_(True))
-        .order_by(ModuloCheckout.orden, ModuloCheckout.id)
-        .all()
-    )
     precios = catalogo_paises.obtener_precios_por_pais(
-        (valores.get("calenzia_precios_url") or "").strip() or None,
-        [(m.codigo, m.precio_mensual_clp) for m in modulos],
-        pais_datos["iso"],
+        _url_precios(valores), pais_datos["iso"]
     )
     if precios is None:
         raise HTTPException(502, "No se pudieron obtener los precios para ese país")
@@ -375,13 +353,69 @@ def precios_checkout(pais: str, sesion: Session = Depends(get_sesion)):
     return {
         "pais": pais_datos,
         "modulos": [
-            {"modulo_codigo": codigo, "monto_minor": monto}
-            for codigo, monto in precios.items()
+            {"modulo_codigo": concepto, "monto_minor": monto}
+            for concepto, monto in precios.items()
         ],
     }
 
 
+@router.get("/pagos", response_model=list[MetodoPagoPublico])
+def metodos_pago_publicos(sesion: Session = Depends(get_sesion)):
+    """Métodos de pago activos para el landing.
+
+    Solo `tipo`, `nombre` e `instrucciones_publicas` — `datos_privados`
+    (credenciales futuras) nunca sale de acá.
+    """
+    return (
+        sesion.query(MetodoPago)
+        .filter(MetodoPago.activo.is_(True))
+        .order_by(MetodoPago.orden, MetodoPago.id)
+        .all()
+    )
+
+
+@router.get("/onboarding/solicitud/{token}")
+def ver_solicitud_publica(token: str, sesion: Session = Depends(get_sesion)):
+    """La solicitud de compra vista por su dueño, por el token del landing.
+
+    Proxy de solo lectura del endpoint público de Calenzia
+    `GET /publico/onboarding/solicitud/{token}` (contrato 8.58, sin auth:
+    la credencial es el propio token). Se devuelve el JSON de Calenzia sin
+    transformarlo, enriquecido con `modulos_nombre` (código → nombre del
+    catálogo de Calenzia) para que el landing muestre los módulos legibles;
+    si un código no está en el catálogo, el landing cae al código.
+    """
+    token_limpio = token.strip()
+    if not token_limpio or len(token_limpio) > 100:
+        raise HTTPException(404, "No encontramos ninguna solicitud con ese enlace.")
+    url = _url_calenzia(sesion)
+    if not url:
+        raise HTTPException(502, "No pudimos consultar tu solicitud. Intenta más tarde.")
+    codigo, solicitud = integracion_calenzia.obtener_solicitud_publica(url, token_limpio)
+    if codigo == 404:
+        raise HTTPException(404, "No encontramos ninguna solicitud con ese enlace.")
+    if solicitud is None:
+        raise HTTPException(502, "No pudimos consultar tu solicitud. Intenta más tarde.")
+
+    modulos_calenzia = integracion_calenzia.obtener_modulos(url)
+    nombres = {m["codigo"]: m["nombre"] for m in (modulos_calenzia or [])}
+    return {**solicitud, "modulos_nombre": nombres}
+
+
 _PATRON_SLUG = re.compile(r"^[a-z][a-z0-9]*(-[a-z0-9]+)*$")
+
+_EDICIONES_VALIDAS = ("comunicacion", "con_ia")
+
+# Puente temporal (bloque 1): el formulario pregunta por rangos de equipo,
+# no por un número exacto. Mientras llegan las preguntas calificadoras, se
+# manda el tope del rango como `nro_trabajadores` del contrato 8.58.
+_EQUIPO_A_TRABAJADORES = {
+    "solo_yo": 1,
+    "2_a_5": 5,
+    "6_a_15": 15,
+    "16_a_50": 50,
+    "mas_de_50": 51,
+}
 
 
 @router.get("/slug-disponible")
@@ -426,6 +460,12 @@ def crear_compra(cuerpo: CompraPeticion, sesion: Session = Depends(get_sesion)):
     if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", cuerpo.admin_correo.strip()):
         raise HTTPException(422, "El correo del administrador no es válido")
 
+    edicion = (cuerpo.edicion or "comunicacion").strip().lower()
+    if edicion not in _EDICIONES_VALIDAS:
+        raise HTTPException(
+            422, "La edición debe ser 'comunicacion' o 'con_ia'"
+        )
+
     url = _url_calenzia(sesion)
     if url:
         disponible = integracion_calenzia.slug_disponible(url, slug)
@@ -440,12 +480,13 @@ def crear_compra(cuerpo: CompraPeticion, sesion: Session = Depends(get_sesion)):
     if rubro is None:
         raise HTTPException(422, "El rubro seleccionado no existe")
 
-    modulos_existentes = {
-        m.codigo: m
-        for m in sesion.query(ModuloCheckout)
-        .filter(ModuloCheckout.activo.is_(True))
-        .all()
-    }
+    modulos_calenzia = integracion_calenzia.obtener_modulos(url) if url else None
+    if modulos_calenzia is None:
+        raise HTTPException(
+            502, "No pudimos verificar el catálogo de módulos de Calenzia. Intenta más tarde."
+        )
+    catalogo_por_codigo = {m["codigo"]: m for m in modulos_calenzia}
+
     necesidades_existentes = {
         n.codigo: n
         for n in sesion.query(NecesidadCheckout)
@@ -458,36 +499,30 @@ def crear_compra(cuerpo: CompraPeticion, sesion: Session = Depends(get_sesion)):
         if necesidad is None:
             raise HTTPException(422, f"La necesidad '{codigo_necesidad}' no existe")
         for codigo_modulo in necesidad.modulos or []:
+            if codigo_modulo == "ia":
+                # Puente temporal (bloque 1): la IA ya no es un módulo sino la
+                # edición `con_ia`; el módulo `ia` no existe en Calenzia 8.58.
+                continue
             codigos_seleccionados[codigo_modulo] = None
 
     for codigo_modulo in cuerpo.modulos_extra:
         codigo = codigo_modulo.strip().lower()
         if not codigo:
             continue
-        if codigo not in modulos_existentes:
+        if codigo not in catalogo_por_codigo:
             raise HTTPException(
                 422, f"El módulo '{codigo_modulo}' no existe o no está disponible"
             )
         codigos_seleccionados[codigo] = None
 
-    modulos_seleccionados = []
     for codigo_modulo in codigos_seleccionados:
-        modulo = modulos_existentes.get(codigo_modulo)
-        if modulo is None:
-            continue
-        modulos_seleccionados.append(
-            {
-                "modulo_codigo": modulo.codigo,
-                "nombre": modulo.nombre,
-                "precio_mensual_clp": modulo.precio_mensual_clp,
-                "limite_mensual": modulo.limite_estandar,
-            }
-        )
+        if codigo_modulo not in catalogo_por_codigo:
+            raise HTTPException(
+                422, f"El módulo '{codigo_modulo}' no existe en el catálogo de Calenzia"
+            )
 
     valores = {a.clave: a.valor for a in sesion.query(Ajuste).all()}
-    paises = catalogo_paises.obtener_paises(
-        (valores.get("calenzia_paises_url") or "").strip() or None
-    )
+    paises = catalogo_paises.obtener_paises(_url_paises(valores))
     pais_datos = catalogo_paises.buscar_pais(paises, cuerpo.pais)
     if pais_datos is None:
         raise HTTPException(422, "El país seleccionado no existe")
@@ -499,13 +534,28 @@ def crear_compra(cuerpo: CompraPeticion, sesion: Session = Depends(get_sesion)):
             f"El {pais_datos.get('etiqueta_id_fiscal', 'identificador fiscal')} es obligatorio",
         )
 
+    nro_trabajadores = cuerpo.nro_trabajadores
+    if nro_trabajadores is None:
+        nro_trabajadores = _EQUIPO_A_TRABAJADORES.get(
+            (cuerpo.equipo_personas or "").strip().lower(), 1
+        )
+
     precios = catalogo_paises.obtener_precios_por_pais(
-        (valores.get("calenzia_precios_url") or "").strip() or None,
-        [(m["modulo_codigo"], m["precio_mensual_clp"]) for m in modulos_seleccionados],
-        pais_datos["iso"],
+        _url_precios(valores), pais_datos["iso"]
     )
+    modulos_seleccionados = [
+        {
+            "modulo_codigo": codigo_modulo,
+            "nombre": catalogo_por_codigo[codigo_modulo]["nombre"],
+            "precio_mensual_clp": precios.get(codigo_modulo, 0)
+            if precios is not None
+            else 0,
+            "limite_mensual": None,
+        }
+        for codigo_modulo in codigos_seleccionados
+    ]
     total_minor = (
-        sum(precios.get(m["modulo_codigo"], 0) for m in modulos_seleccionados)
+        sum(m["precio_mensual_clp"] for m in modulos_seleccionados)
         if precios is not None
         else None
     )
@@ -541,6 +591,9 @@ def crear_compra(cuerpo: CompraPeticion, sesion: Session = Depends(get_sesion)):
             "admin_nombre": cuerpo.admin_nombre.strip(),
             "admin_correo": cuerpo.admin_correo.strip(),
             "admin_telefono": (cuerpo.admin_telefono or "").strip() or None,
+            "edicion": edicion,
+            "nro_trabajadores": nro_trabajadores,
+            "respuestas": dict(cuerpo.respuestas or {}),
         },
         modulos=modulos_seleccionados,
         total_clp=total_modulos(modulos_seleccionados),

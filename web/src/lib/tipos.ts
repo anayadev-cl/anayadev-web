@@ -119,6 +119,60 @@ export interface ModuloSeleccionado {
   modulo_codigo: string
 }
 
+export interface SugerenciaCalenzia {
+  codigo: string
+  tipo: 'edicion' | 'modulo'
+  objetivo: string
+  titulo: string
+  motivo: string
+  origen: 'regla' | 'superadmin'
+  aceptada: boolean | null
+}
+
+export interface SolicitudLanding {
+  estado: 'solicitada' | 'en_revision' | 'aprobada' | 'activa' | 'rechazada' | 'expirada'
+  negocio_nombre: string
+  slug: string
+  glosa?: string | null
+  pais: string
+  edicion: string
+  nro_trabajadores: number
+  modulos: string[]
+  sugerencias: SugerenciaCalenzia[]
+  moneda?: string | null
+  simbolo_moneda?: string | null
+  decimales?: number | null
+  total_primera_factura?: number | null
+  creado_en: string
+  modulos_nombre?: Record<string, string>
+}
+
+export interface MetodoPagoPublico {
+  tipo: 'transferencia' | 'paypal' | 'otro'
+  nombre: string
+  instrucciones_publicas: string
+}
+
+export interface MetodoPagoAdmin {
+  id: number
+  tipo: 'transferencia' | 'paypal' | 'otro'
+  nombre: string
+  instrucciones_publicas: string
+  datos_privados: string | null
+  activo: boolean
+  orden: number
+}
+
+export interface SolicitudCalenzia {
+  token: string | null
+  solicitud_id: string | null
+  estado: string | null
+  slug: string | null
+  ya_existia: boolean | null
+  sugerencias: SugerenciaCalenzia[] | null
+  creado_en: string | null
+}
+
 export interface Compra {
   id: number
   codigo: string
@@ -146,6 +200,10 @@ export interface Compra {
     admin_nombre: string
     admin_correo: string
     admin_telefono: string | null
+    edicion?: 'comunicacion' | 'con_ia'
+    nro_trabajadores?: number
+    respuestas?: Record<string, unknown>
+    calenzia?: SolicitudCalenzia | null
   }
   modulos: {
     modulo_codigo: string

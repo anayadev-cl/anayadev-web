@@ -51,6 +51,9 @@ Desde el panel puedes:
 - **Compras**: solicitudes del checkout de Calenzia, reenvío manual al
   webhook de onboarding, y catálogos del checkout (módulos con precio y
   límite, rubros) totalmente editables.
+- **Pagos**: catálogo de métodos de pago que ve el cliente en su solicitud
+  aprobada (tipo, nombre, orden, activo, instrucciones públicas y datos
+  privados que nunca se publican).
 - **Chatbot**: reglas de palabras clave → respuesta y botones de sugerencia
   del asistente virtual.
 - **Ajustes**: correo de contacto, WhatsApp, redes, respuesta de respaldo
@@ -72,13 +75,31 @@ administrador → selección de módulos → envío de la solicitud. **Todavía 
 hay pago en línea**: el cliente no paga nada al enviar; el pedido queda
 registrado en Compras y se envía al webhook de Calenzia
 (`POST /api/v1/publico/onboarding/comprar` con header `X-Webhook-Secret`,
-mismo contrato del schema `OnboardingCompraRequest` de agenda-api), que
-crea el tenant en estado **pendiente** (S25). El superadmin lo activa a mano
-con o sin días de prueba, o lo renueva por el mes siguiente; recién ahí se
-envía el correo de acceso al admin. La URL y el secreto se configuran en
-Ajustes; sin ellos, la solicitud queda marcada para activación manual y el
-equipo la revisa. Cuando integres la pasarela real (Webpay), el botón de
-envío ya cierra en este flujo.
+contrato 8.58 del schema `OnboardingCompraRequest` de agenda-api:
+`negocio`, `contacto`, `edicion`, `nro_trabajadores`, `modulos` como códigos
+y `respuestas`). Calenzia crea la **solicitud** en estado `solicitada` y
+responde con `solicitud_id`, `token` (credencial del landing
+`/mi-solicitud/{token}`) y `sugerencias`, que quedan guardados en la compra;
+el superadmin de Calenzia la revisa, aprueba y registra el pago (S29).
+Países, precios, rubros y módulos del checkout se toman EN VIVO de la API
+pública de Calenzia (settings `ANAYADEV_CALENZIA_*`, sobrescribibles desde
+Ajustes). La URL y el secreto del webhook se configuran en Ajustes (la URL
+se deriva de la API de Calenzia si queda vacía); sin ellos, la solicitud
+queda marcada para activación manual y el equipo la revisa. Cuando integres
+la pasarela real (Webpay), el botón de envío ya cierra en este flujo.
+
+## Seguimiento de la solicitud (landing)
+
+`/mi-solicitud/{token}` es la vista pública de solo lectura de la solicitud
+(la misma pantalla a la que apunta el enlace «ver mi solicitud» al terminar
+el checkout). Consume el endpoint público de Calenzia
+`GET /api/v1/publico/onboarding/solicitud/{token}` (proxied por este API, sin
+auth: la credencial es el propio token). Según el estado muestra: revisión
+(sin montos, con la glosa como código de solicitud y las sugerencias del
+motor de reglas), plan aprobado/activo (total de la primera factura, métodos
+de pago activos y la glosa destacada con botón copiar) o rechazada/expirada
+(mensaje sobrio). Los métodos de pago se administran en el panel **Pagos**
+(`GET /publico/pagos` expone solo tipo, nombre e instrucciones públicas).
 
 ## Formulario de contacto
 
@@ -94,6 +115,8 @@ configura las variables `ANAYADEV_SMTP_*` del `.env`.
 - `POST /api/v1/publico/contacto` — recibe mensajes del formulario.
 - `POST /api/v1/publico/chatbot` — responde según las reglas del panel.
 - `GET /api/v1/publico/checkout` — catálogo público del checkout (módulos y rubros).
+- `GET /api/v1/publico/pagos` — métodos de pago activos (solo campos públicos).
+- `GET /api/v1/publico/onboarding/solicitud/{token}` — proxy de la solicitud del cliente (landing).
 - `POST /api/v1/publico/compras` y `POST /api/v1/publico/compras/{id}/pagar` — ciclo de compra.
 - `POST /api/v1/admin/login` — obtiene el token JWT del panel.
 - CRUD bajo `/api/v1/admin/*` (secciones, productos, mensajes, compras,

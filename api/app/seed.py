@@ -9,6 +9,7 @@ from .bd import SesionLocal
 from .config import ajustes
 from .modelos import (
     Ajuste,
+    MetodoPago,
     ModuloCheckout,
     NecesidadCheckout,
     Producto,
@@ -31,15 +32,9 @@ AJUSTES_INICIALES = {
     ),
     "webhook_onboarding_url": "",
     "webhook_onboarding_secreto": "",
-    "calenzia_api_url": "http://localhost:8000",
+    "calenzia_api_url": "",
     "calenzia_paises_url": "",
     "calenzia_precios_url": "",
-    "transferencia_banco": "",
-    "transferencia_titular": "",
-    "transferencia_rut": "",
-    "transferencia_tipo_cuenta": "",
-    "transferencia_numero_cuenta": "",
-    "transferencia_correo": "",
 }
 
 SECCIONES_INICIALES = [
@@ -319,18 +314,14 @@ RESPUESTAS_CHATBOT_INICIALES = [
 MODULOS_CHECKOUT_INICIALES = [
     ("agenda", "Agenda", "Agenda y calendario de citas para tu equipo.", 0, None),
     ("agendamiento_publico", "Agendamiento público", "Tus clientes reservan en línea desde tu propia página.", 0, None),
-    ("ia", "Asistente IA", "Agente de IA que agienda, conversa y responde por ti.", 0, 300),
     ("whatsapp", "Recordatorios WhatsApp", "Recordatorios y conversaciones por WhatsApp.", 0, 500),
     ("campanas", "Campañas", "Marketing y comunicaciones masivas a tus clientes.", 0, 2000),
     ("presupuestos", "Presupuestos", "Envía presupuestos y haz seguimiento.", 0, None),
     ("inventario", "Inventario", "Controla productos y stock.", 0, None),
     ("reportes_avanzados", "Reportes avanzados", "Métricas y reportes del negocio.", 0, None),
     ("encuestas", "Encuestas", "Encuestas de satisfacción a tus clientes.", 0, None),
-    ("facturacion", "Facturación", "Boletas y documentos de venta.", 0, None),
-    ("fichas_clinicas", "Fichas clínicas", "Registro clínico de tus pacientes.", 0, None),
-    ("portal_familias", "Portal de familias", "Portal para que familias sigan el avance.", 0, None),
-    ("evaluaciones", "Evaluaciones del desarrollo", "Seguimiento y evaluaciones.", 0, None),
     ("branding_avanzado", "Branding avanzado", "Personaliza la plataforma con tu marca a fondo.", 0, None),
+    ("sobrecupos", "Sobrecupos", "Agendar fuera del horario estricto.", 0, None),
 ]
 
 RUBROS_CHECKOUT_INICIALES = [
@@ -346,12 +337,6 @@ NECESIDADES_CHECKOUT_INICIALES = [
         "¿Quieres que tus clientes reserven solos, sin llamarte?",
         "Tus clientes eligen su hora desde tu propia página, a cualquier hora.",
         ["agenda", "agendamiento_publico"],
-    ),
-    (
-        "asistente_ia",
-        "¿Quieres que una IA atienda y agende por ti?",
-        "Responde consultas y agenda citas incluso fuera de horario.",
-        ["ia"],
     ),
     (
         "whatsapp",
@@ -441,9 +426,54 @@ def sembrar() -> None:
         _sembrar_checkout_modulos(sesion)
         _sembrar_checkout_rubros(sesion)
         _sembrar_checkout_necesidades(sesion)
+        _migrar_metodos_pago(sesion)
         sesion.commit()
     finally:
         sesion.close()
+
+
+# Campos sueltos de transferencia del ajuste antiguo: se migran a un único
+# método del catálogo y después se eliminan (solo si el catálogo está vacío).
+CLAVES_TRANSFERENCIA_VIEJAS = (
+    ("transferencia_banco", "Banco"),
+    ("transferencia_titular", "Titular"),
+    ("transferencia_rut", "RUT"),
+    ("transferencia_tipo_cuenta", "Tipo de cuenta"),
+    ("transferencia_numero_cuenta", "Número de cuenta"),
+    ("transferencia_correo", "Correo para el comprobante"),
+)
+
+
+def _migrar_metodos_pago(sesion: Session) -> None:
+    """Migra los 6 ajustes viejos de transferencia a un registro del catálogo.
+
+    Idempotente: solo actúa si el catálogo está vacío. Crea el método
+    únicamente si alguno de los campos viejos tenía contenido (no se inventa
+    un método vacío que el landing le mostraría a clientes reales); las 6
+    claves viejas se eliminan SIEMPRE — quedaron reemplazadas por el catálogo.
+    """
+    if sesion.query(MetodoPago).count() > 0:
+        return
+    existentes = {a.clave: a.valor for a in sesion.query(Ajuste).all()}
+    lineas = [
+        f"{etiqueta}: {valor}"
+        for clave, etiqueta in CLAVES_TRANSFERENCIA_VIEJAS
+        if (valor := (existentes.get(clave) or "").strip())
+    ]
+    if lineas:
+        sesion.add(
+            MetodoPago(
+                tipo="transferencia",
+                nombre="Transferencia bancaria",
+                instrucciones_publicas="\n".join(lineas),
+                activo=True,
+                orden=0,
+            )
+        )
+    for clave, _ in CLAVES_TRANSFERENCIA_VIEJAS:
+        ajuste = sesion.query(Ajuste).filter(Ajuste.clave == clave).first()
+        if ajuste is not None:
+            sesion.delete(ajuste)
 
 
 def _sembrar_usuario(sesion: Session) -> None:

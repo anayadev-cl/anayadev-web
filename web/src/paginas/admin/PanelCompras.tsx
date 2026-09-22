@@ -6,7 +6,7 @@ import { Aviso, Boton, Campo, Switch, entradaClase } from './ui'
 const ESTADOS_COMPRA: Record<Compra['estado'], { etiqueta: string; clase: string }> = {
   pendiente_pago: { etiqueta: 'Pendiente de pago', clase: 'border-bruma/30 bg-bruma/10 text-bruma' },
   pagada: { etiqueta: 'Pagada (activación manual)', clase: 'border-electrica/40 bg-electrica/10 text-electrica' },
-  enviada: { etiqueta: 'Enviada a Calenzia', clase: 'border-turquesa/40 bg-turquesa/10 text-turquesa' },
+  enviada: { etiqueta: 'Solicitud creada en Calenzia', clase: 'border-turquesa/40 bg-turquesa/10 text-turquesa' },
   error_webhook: { etiqueta: 'Error en webhook', clase: 'border-red-400/40 bg-red-500/10 text-red-300' },
 }
 
@@ -188,9 +188,9 @@ export function PanelCompras() {
         <div>
           <h1 className="text-2xl font-bold text-blanco">Compras de Calenzia</h1>
           <p className="mt-1 text-sm text-bruma">
-            Solicitudes del checkout. Al enviar, la solicitud se registra en
-            Calenzia como tenant en estado <span className="text-cian">demo</span> y
-            se activa desde el superadmin cuando la revisas (sin pasarela de
+            Solicitudes del checkout. Al enviar, Calenzia crea la solicitud en
+            estado <span className="text-cian">solicitada</span> con su token
+            de seguimiento y se revisa desde su superadmin (sin pasarela de
             pago aún). Configura la URL y el secreto del webhook en Ajustes.
           </p>
         </div>
@@ -287,8 +287,9 @@ export function PanelCompras() {
           <div>
             <h2 className="text-xl font-bold text-blanco">Módulos del checkout</h2>
             <p className="mt-1 text-sm text-bruma">
-              Lo que el comprador puede elegir. El código debe existir en el
-              catálogo de Calenzia (superadmin → módulos).
+              El checkout toma los módulos y sus precios en vivo desde
+              Calenzia (solo se ofrecen los que tienen precio); esta lista
+              queda como espejo local de referencia.
             </p>
           </div>
           <Boton

@@ -116,6 +116,8 @@ def enviar_correo_compra(compra) -> bool:
         f"País: {datos.get('pais', 'CL')}\n"
         f"Rubro: {datos.get('rubro_nombre', '')}\n"
         f"Equipo: {datos.get('equipo_personas') or '-'}\n"
+        f"Edición: {datos.get('edicion') or 'comunicacion'}\n"
+        f"Trabajadores: {datos.get('nro_trabajadores', '-')}\n"
         f"Admin: {datos.get('admin_nombre', '')} ({datos.get('admin_correo', '')})\n"
         f"Teléfono: {datos.get('admin_telefono') or '-'}\n"
         f"{datos.get('etiqueta_id_fiscal', 'RUT')}: {datos.get('id_fiscal') or '-'}\n\n"

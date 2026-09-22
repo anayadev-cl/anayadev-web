@@ -3,6 +3,8 @@ import type {
   Compra,
   ContenidoPublico,
   MensajeContacto,
+  MetodoPagoAdmin,
+  MetodoPagoPublico,
   ModuloCheckout,
   NecesidadCheckout,
   NecesidadPublica,
@@ -11,11 +13,13 @@ import type {
   ReglaChatbot,
   RubroCheckout,
   Seccion,
+  SolicitudLanding,
 } from './tipos'
 
 const BASE = import.meta.env.VITE_API_URL ?? ''
 
-let token: string | null = localStorage.getItem('token_anayadev')
+let token: string | null =
+  typeof localStorage === 'undefined' ? null : localStorage.getItem('token_anayadev')
 
 export const getToken = () => token
 
@@ -37,7 +41,9 @@ async function pedir(ruta: string, opciones: RequestInit = {}): Promise<Response
     const cuerpo = await respuesta.json().catch(() => null)
     const detalle =
       typeof cuerpo?.detail === 'string' ? cuerpo.detail : `Error ${respuesta.status}`
-    throw new Error(detalle)
+    const error = new Error(detalle) as Error & { status?: number }
+    error.status = respuesta.status
+    throw error
   }
   return respuesta
 }
@@ -68,16 +74,11 @@ export const api = {
     necesidades: NecesidadPublica[]
     rubros: { codigo: string; nombre: string }[]
     paises: Pais[]
-    transferencia: {
-      transferencia_banco: string
-      transferencia_titular: string
-      transferencia_rut: string
-      transferencia_tipo_cuenta: string
-      transferencia_numero_cuenta: string
-      transferencia_correo: string
-    }
     modulos: { codigo: string; nombre: string; descripcion: string }[]
   }> => (await pedir('/api/v1/publico/checkout')).json(),
+
+  pagosPublicos: async (): Promise<MetodoPagoPublico[]> =>
+    (await pedir('/api/v1/publico/pagos')).json(),
 
   preciosCheckout: async (
     pais: string,
@@ -104,6 +105,9 @@ export const api = {
     id_fiscal?: string | null
     necesidades: string[]
     modulos_extra: string[]
+    edicion: 'comunicacion' | 'con_ia'
+    nro_trabajadores: number
+    respuestas?: Record<string, unknown>
   }): Promise<Compra> =>
     (await pedir('/api/v1/publico/compras', {
       method: 'POST',
@@ -112,6 +116,11 @@ export const api = {
 
   enviarSolicitud: async (id: number): Promise<Compra> =>
     (await pedir(`/api/v1/publico/compras/${id}/pagar`, { method: 'POST' })).json(),
+
+  verSolicitud: async (token: string): Promise<SolicitudLanding> =>
+    (
+      await pedir(`/api/v1/publico/onboarding/solicitud/${encodeURIComponent(token)}`)
+    ).json(),
 
   login: async (usuario: string, clave: string) => {
     const respuesta = await pedir('/api/v1/admin/login', {
@@ -235,6 +244,18 @@ export const api = {
     },
     eliminar: async (nombre: string) => {
       await pedir(`/api/v1/admin/medios/${nombre}`, { method: 'DELETE' })
+    },
+  },
+
+  pagosAdmin: {
+    listar: async (): Promise<MetodoPagoAdmin[]> =>
+      (await pedir('/api/v1/admin/pagos')).json(),
+    crear: async (cuerpo: Omit<MetodoPagoAdmin, 'id'>): Promise<MetodoPagoAdmin> =>
+      (await pedir('/api/v1/admin/pagos', { method: 'POST', body: JSON.stringify(cuerpo) })).json(),
+    actualizar: async (id: number, cuerpo: Omit<MetodoPagoAdmin, 'id'>): Promise<MetodoPagoAdmin> =>
+      (await pedir(`/api/v1/admin/pagos/${id}`, { method: 'PUT', body: JSON.stringify(cuerpo) })).json(),
+    eliminar: async (id: number) => {
+      await pedir(`/api/v1/admin/pagos/${id}`, { method: 'DELETE' })
     },
   },
 }
