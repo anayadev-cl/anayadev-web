@@ -344,12 +344,6 @@ NECESIDADES_CHECKOUT_INICIALES = [
         ["agenda", "agendamiento_publico"],
     ),
     (
-        "asistente_ia",
-        "¿Quieres que una IA atienda y agende por ti?",
-        "Responde consultas y agenda citas incluso fuera de horario.",
-        [],
-    ),
-    (
         "whatsapp",
         "¿Quieres recordatorios automáticos por WhatsApp?",
         "Tus clientes recuerdan su hora sin que tengas que hacer nada.",

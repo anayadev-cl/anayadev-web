@@ -25,15 +25,69 @@ const OPCIONES_EQUIPO = [
 ]
 
 const NECESIDAD_BASE = 'reservas_online'
+const NECESIDAD_IA = 'asistente_ia'
+
+interface PreguntaNegocio {
+  clave: string
+  pregunta: string
+  ayuda: string
+}
+
+const PREGUNTAS_NEGOCIO: PreguntaNegocio[] = [
+  {
+    clave: 'responde_fuera_de_horario',
+    pregunta: '¿Tus clientes te escriben fuera de tu horario de atención?',
+    ayuda: 'Mensajes por la noche o los fines de semana que hoy quedan para el día siguiente.',
+  },
+  {
+    clave: 'cotiza_antes_de_atender',
+    pregunta: '¿Cotizas o envías presupuestos antes de atender?',
+    ayuda: 'Precios, condiciones o un PDF antes de confirmar cada cliente.',
+  },
+  {
+    clave: 'vende_productos',
+    pregunta: '¿Vendes productos o manejas stock?',
+    ayuda: 'Además de las horas agendadas, llevas productos o reposición.',
+  },
+  {
+    clave: 'necesita_reportes',
+    pregunta: '¿Quieres reportes de cómo va tu negocio?',
+    ayuda: 'Ingresos, ocupación por profesional y comparaciones entre periodos.',
+  },
+  {
+    clave: 'quiere_marca_propia',
+    pregunta: '¿Quieres que tu agenda se vea 100% con tu marca?',
+    ayuda: 'Tu logo y tus colores, sin la marca de anayadev.',
+  },
+]
+
+const EDICIONES: {
+  codigo: 'comunicacion' | 'con_ia'
+  nombre: string
+  descripcion: string
+}[] = [
+  {
+    codigo: 'comunicacion',
+    nombre: 'Comunicación',
+    descripcion:
+      'Agenda, recordatorios y mensajes con tus clientes. Tú y tu equipo atienden las conversaciones.',
+  },
+  {
+    codigo: 'con_ia',
+    nombre: 'Con IA',
+    descripcion:
+      'El asistente de IA responde y agenda por ti, incluso fuera de horario, y libera a tu equipo.',
+  },
+]
 
 function recomendacionSegunEquipo(equipo: string): Record<string, boolean> {
   if (equipo === 'solo_yo') {
-    return { asistente_ia: true, whatsapp: false, crecimiento: false }
+    return { whatsapp: false, crecimiento: false }
   }
   if (equipo === '2_a_5') {
-    return { asistente_ia: true, whatsapp: true, crecimiento: false }
+    return { whatsapp: true, crecimiento: false }
   }
-  return { asistente_ia: true, whatsapp: true, crecimiento: true }
+  return { whatsapp: true, crecimiento: true }
 }
 
 export function PaginaCompra() {
@@ -64,6 +118,10 @@ export function PaginaCompra() {
   const [planTocado, setPlanTocado] = useState(false)
   const [extras, setExtras] = useState<Record<string, boolean>>({})
   const [compraPendiente, setCompraPendiente] = useState<Compra | null>(null)
+  const [edicion, setEdicion] = useState<'comunicacion' | 'con_ia'>('comunicacion')
+  const [respuestasNegocio, setRespuestasNegocio] = useState<Record<string, boolean>>(
+    Object.fromEntries(PREGUNTAS_NEGOCIO.map((p) => [p.clave, false])),
+  )
 
   const [enviando, setEnviando] = useState(false)
   const [error, setError] = useState('')
@@ -128,7 +186,9 @@ export function PaginaCompra() {
     return () => clearTimeout(temporizador)
   }, [slug])
 
-  const preguntas = necesidades.filter((n) => n.codigo !== NECESIDAD_BASE)
+  const preguntas = necesidades.filter(
+    (n) => n.codigo !== NECESIDAD_BASE && n.codigo !== NECESIDAD_IA,
+  )
   const codigosCubiertos = new Set(
     necesidades.flatMap((n) => n.modulos),
   )
@@ -203,6 +263,10 @@ export function PaginaCompra() {
     setExtras({ ...extras, [codigo]: !extras[codigo] })
   }
 
+  function responderPregunta(clave: string, valor: boolean) {
+    setRespuestasNegocio({ ...respuestasNegocio, [clave]: valor })
+  }
+
   function aplicarRecomendacion() {
     setPlanTocado(true)
     setPlan(recomendacionSegunEquipo(equipo))
@@ -214,6 +278,11 @@ export function PaginaCompra() {
     setEnviando(true)
     try {
       const opcionEquipo = OPCIONES_EQUIPO.find((o) => o.valor === equipo)
+      const respuestas: Record<string, boolean> = {
+        ...respuestasNegocio,
+        atiende_por_whatsapp: !!plan['whatsapp'],
+        envia_promociones: !!plan['crecimiento'],
+      }
       const compra = await api.crearCompra({
         slug,
         nombre_empresa: nombreEmpresa,
@@ -227,9 +296,9 @@ export function PaginaCompra() {
         id_fiscal: idFiscal || null,
         necesidades: necesidadesElegidas,
         modulos_extra: extrasElegidos,
-        edicion: plan['asistente_ia'] ? 'con_ia' : 'comunicacion',
+        edicion,
         nro_trabajadores: opcionEquipo?.nro ?? 1,
-        respuestas: {},
+        respuestas,
       })
       setCompraPendiente(compra)
     } catch (e) {
@@ -535,13 +604,58 @@ export function PaginaCompra() {
               <div className="space-y-5">
                 <div>
                   <h2 className="text-lg font-semibold text-blanco">
-                    Elige lo que necesitas hoy
+                    Arma tu plan
                   </h2>
                   <p className="mt-1 text-sm text-bruma">
-                    La agenda con reservas en línea viene incluida. Cuéntanos
-                    qué más le hace sentido a tu negocio: puedes cambiarlo
-                    cuando quieras.
+                    La agenda con reservas en línea viene incluida. Elige tu
+                    edición y qué más le hace sentido a tu negocio: puedes
+                    cambiarlo cuando quieras.
                   </p>
+                </div>
+
+                <div>
+                  <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-bruma/70">
+                    Tu edición
+                  </span>
+                  <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                    {EDICIONES.map((opcion) => {
+                      const activo = edicion === opcion.codigo
+                      return (
+                        <button
+                          key={opcion.codigo}
+                          type="button"
+                          onClick={() => setEdicion(opcion.codigo)}
+                          className={`rounded-2xl border p-4 text-left transition-all ${
+                            activo
+                              ? 'border-cian/60 bg-cian/10 shadow-[0_0_26px_-14px_rgba(0,223,240,0.6)]'
+                              : 'border-blanco/10 bg-abisal/60 hover:border-blanco/25'
+                          }`}
+                        >
+                          <span className="flex items-center justify-between gap-2">
+                            <span className="text-sm font-semibold text-blanco">
+                              {opcion.nombre}
+                            </span>
+                            <span
+                              className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[11px] font-bold ${
+                                activo
+                                  ? 'border-turquesa bg-turquesa/20 text-turquesa'
+                                  : 'border-blanco/25 text-transparent'
+                              }`}
+                            >
+                              ✓
+                            </span>
+                          </span>
+                          <span className="mt-1 block text-xs leading-relaxed text-bruma">
+                            {opcion.descripcion}
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <span className="mt-1.5 block text-xs text-bruma/60">
+                    Con IA, el asistente responde y agenda solo fuera de
+                    horario; sin IA, todo queda en manos de tu equipo.
+                  </span>
                 </div>
 
                 <div className="space-y-3">
@@ -630,6 +744,60 @@ export function PaginaCompra() {
                   <span className="text-2xl font-bold texto-gradiente">
                     {totalFormateado}
                   </span>
+                </div>
+
+                <div>
+                  <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-bruma/70">
+                    Así trabaja tu negocio
+                  </span>
+                  <div className="space-y-2.5">
+                    {PREGUNTAS_NEGOCIO.map((pregunta) => {
+                      const valor = !!respuestasNegocio[pregunta.clave]
+                      return (
+                        <div
+                          key={pregunta.clave}
+                          className="rounded-2xl border border-blanco/10 bg-abisal/60 p-4"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-semibold text-blanco">
+                                {pregunta.pregunta}
+                              </p>
+                              <p className="mt-0.5 text-xs leading-relaxed text-bruma">
+                                {pregunta.ayuda}
+                              </p>
+                            </div>
+                            <div className="flex shrink-0 gap-0.5 rounded-full border border-blanco/15 p-0.5">
+                              {[
+                                { etiqueta: 'Sí', valor: true },
+                                { etiqueta: 'No', valor: false },
+                              ].map((opcion) => (
+                                <button
+                                  key={String(opcion.valor)}
+                                  type="button"
+                                  onClick={() =>
+                                    responderPregunta(pregunta.clave, opcion.valor)
+                                  }
+                                  className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+                                    valor === opcion.valor
+                                      ? 'bg-cian/20 text-cian'
+                                      : 'text-bruma/60 hover:text-bruma'
+                                  }`}
+                                >
+                                  {opcion.etiqueta}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <p className="mt-2 text-xs leading-relaxed text-bruma/60">
+                    Con tus respuestas te proponemos lo que mejor te calza.
+                    No es un examen: lo que no te haga sentido, déjalo en
+                    «No» y lo revisamos contigo.
+                  </p>
                 </div>
 
                 <button
@@ -751,6 +919,10 @@ export function PaginaCompra() {
                     [
                       'Equipo',
                       OPCIONES_EQUIPO.find((o) => o.valor === equipo)?.etiqueta ?? '—',
+                    ],
+                    [
+                      'Edición',
+                      EDICIONES.find((o) => o.codigo === edicion)?.nombre ?? edicion,
                     ],
                     ['Tu página', `agenda.anayadev.cl/${slug}`],
                     ['A cargo', `${adminNombre} · ${adminCorreo}`],
