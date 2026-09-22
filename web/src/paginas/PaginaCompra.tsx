@@ -4,6 +4,13 @@ import { Marca } from '../componentes/Marca'
 import { api } from '../lib/api'
 import { formatearMonto } from '../lib/paises'
 import type { Compra, NecesidadPublica, Pais } from '../lib/tipos'
+import {
+  TELEFONO_DIGITOS_POR_PAIS,
+  formatearRut,
+  formatearTelefono,
+  validarRut,
+  validarTelefono,
+} from '../lib/validaciones'
 
 const PASOS = ['Tu negocio', 'Tu plan', 'Tu equipo', 'Enviar']
 
@@ -249,7 +256,18 @@ export function PaginaCompra() {
       const correoValido = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(adminCorreo.trim())
       const fiscalOk =
         !paisActual?.id_fiscal_obligatorio || idFiscal.trim().length > 0
-      return adminNombre.trim().length > 0 && correoValido && fiscalOk
+      const rutOk =
+        paisActual?.iso !== 'CL' || idFiscal.trim() === '' || validarRut(idFiscal)
+      const telefonoOk =
+        adminTelefono.trim() === '' ||
+        validarTelefono(adminTelefono, paisActual?.iso ?? paisIso)
+      return (
+        adminNombre.trim().length > 0 &&
+        correoValido &&
+        fiscalOk &&
+        rutOk &&
+        telefonoOk
+      )
     }
     return true
   }
@@ -876,12 +894,22 @@ export function PaginaCompra() {
                     className={entrada}
                     placeholder={
                       paisActual?.iso === 'CL'
-                        ? 'Ej. 76.543.210-K'
+                        ? 'Ej. 12.345.678-5'
                         : `Ej. tu ${paisActual?.etiqueta_id_fiscal ?? 'ID'}`
                     }
                     value={idFiscal}
-                    onChange={(e) => setIdFiscal(e.target.value)}
+                    onChange={(e) => {
+                      const valor = e.target.value
+                      setIdFiscal(paisActual?.iso === 'CL' ? formatearRut(valor) : valor)
+                    }}
                   />
+                  {paisActual?.iso === 'CL' &&
+                    idFiscal.trim() !== '' &&
+                    !validarRut(idFiscal) && (
+                      <span className="mt-1.5 block text-xs text-red-300">
+                        El RUT no es válido. Revisa los dígitos y el dígito verificador.
+                      </span>
+                    )}
                   <span className="mt-1.5 block text-xs text-bruma/60">
                     Lo usamos para la facturación de tu plan.
                   </span>
@@ -902,9 +930,22 @@ export function PaginaCompra() {
                         paisActual?.iso === 'CL' ? '9 1234 5678' : '(555) 123-4567'
                       }
                       value={adminTelefono}
-                      onChange={(e) => setAdminTelefono(e.target.value)}
+                      onChange={(e) =>
+                        setAdminTelefono(
+                          formatearTelefono(e.target.value, paisActual?.iso ?? paisIso),
+                        )
+                      }
                     />
                   </div>
+                  {adminTelefono.trim() !== '' &&
+                    !validarTelefono(adminTelefono, paisActual?.iso ?? paisIso) && (
+                      <span className="mt-1.5 block text-xs text-red-300">
+                        El teléfono debe tener{' '}
+                        {TELEFONO_DIGITOS_POR_PAIS[paisActual?.iso ?? ''] ??
+                          'entre 6 y 15'}{' '}
+                        dígitos (sin contar el prefijo del país).
+                      </span>
+                    )}
                 </label>
               </div>
             )}
