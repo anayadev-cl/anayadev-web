@@ -15,6 +15,11 @@ class Ajustes(BaseSettings):
     directorio_uploads: Path = BASE_DIR / "uploads"
     cors_origenes: str = "http://localhost:5173,http://127.0.0.1:5173"
     email_destino: str = "hola@anayadev.cl"
+    # Nombre VISIBLE del remitente en los correos transaccionales (nueva
+    # compra, confirmación de solicitud, contacto). En producción se setea
+    # vía ANAYADEV_EMAIL_NOMBRE para alinear la voz con la de Calenzia
+    # (ej. "Equipo de ventas de anayadev").
+    email_nombre: str = "anayadev.cl"
     smtp_host: str = ""
     smtp_puerto: int = 587
     smtp_usuario: str = ""

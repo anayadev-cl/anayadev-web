@@ -26,7 +26,7 @@ def _enviar_por_resend(
     if not clave.startswith("re_"):
         return False
     datos: dict = {
-        "from": formataddr(("anayadev.cl", "noreply@anayadev.cl")),
+        "from": formataddr((ajustes.email_nombre, "noreply@anayadev.cl")),
         "to": [destino],
         "subject": asunto,
         "text": cuerpo,
@@ -70,7 +70,7 @@ def _enviar(
     remitente = ajustes.smtp_usuario or "noreply@anayadev.cl"
     correo_mime = MIMEText(cuerpo, "plain", "utf-8")
     correo_mime["Subject"] = asunto
-    correo_mime["From"] = formataddr(("anayadev.cl", remitente))
+    correo_mime["From"] = formataddr((ajustes.email_nombre, remitente))
     correo_mime["To"] = destinatario
     if reply_to:
         correo_mime["Reply-To"] = reply_to
