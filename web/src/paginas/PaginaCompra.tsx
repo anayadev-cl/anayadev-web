@@ -23,13 +23,18 @@ interface ModuloCatalogo {
 const entrada =
   'w-full rounded-xl border border-blanco/12 bg-abisal/80 px-4 py-3 text-sm text-blanco outline-none transition-colors placeholder:text-bruma/40 focus:border-cian/50 focus:ring-1 focus:ring-cian/30'
 
-const OPCIONES_EQUIPO = [
-  { valor: 'solo_yo', etiqueta: 'Solo yo', ayuda: 'Trabajo por mi cuenta', nro: 1 },
-  { valor: '2_a_5', etiqueta: '2 a 5', ayuda: 'Un equipo pequeño', nro: 5 },
-  { valor: '6_a_15', etiqueta: '6 a 15', ayuda: 'Varios profesionales', nro: 15 },
-  { valor: '16_a_50', etiqueta: '16 a 50', ayuda: 'Un equipo grande', nro: 50 },
-  { valor: 'mas_de_50', etiqueta: 'Más de 50', ayuda: 'Una organización', nro: 51 },
-]
+const MAX_TRABAJADORES = 5000
+
+function numeroTrabajadoresValido(texto: string): number | null {
+  const valor = texto.trim()
+  if (!/^\d+$/.test(valor)) return null
+  const numero = parseInt(valor, 10)
+  return numero >= 1 && numero <= MAX_TRABAJADORES ? numero : null
+}
+
+function etiquetaEquipo(nroTrabajadores: number): string {
+  return `${nroTrabajadores} ${nroTrabajadores === 1 ? 'persona' : 'personas'}`
+}
 
 const NECESIDAD_BASE = 'reservas_online'
 const NECESIDAD_IA = 'asistente_ia'
@@ -87,11 +92,11 @@ const EDICIONES: {
   },
 ]
 
-function recomendacionSegunEquipo(equipo: string): Record<string, boolean> {
-  if (equipo === 'solo_yo') {
+function recomendacionSegunEquipo(nroTrabajadores: number): Record<string, boolean> {
+  if (nroTrabajadores <= 1) {
     return { whatsapp: false, crecimiento: false }
   }
-  if (equipo === '2_a_5') {
+  if (nroTrabajadores <= 5) {
     return { whatsapp: true, crecimiento: false }
   }
   return { whatsapp: true, crecimiento: true }
@@ -114,7 +119,7 @@ export function PaginaCompra() {
   const [estadoSlug, setEstadoSlug] = useState<'comprobando' | 'libre' | 'ocupado' | null>(null)
   const [tipoEntidad, setTipoEntidad] = useState('empresa')
   const [rubroCodigo, setRubroCodigo] = useState('')
-  const [equipo, setEquipo] = useState('')
+  const [nroTrabajadores, setNroTrabajadores] = useState('1')
 
   const [adminNombre, setAdminNombre] = useState('')
   const [adminCorreo, setAdminCorreo] = useState('')
@@ -174,9 +179,11 @@ export function PaginaCompra() {
   }, [paisIso])
 
   useEffect(() => {
-    if (!equipo || planTocado) return
-    setPlan(recomendacionSegunEquipo(equipo))
-  }, [equipo, planTocado])
+    if (planTocado) return
+    const trabajadores = numeroTrabajadoresValido(nroTrabajadores)
+    if (trabajadores === null) return
+    setPlan(recomendacionSegunEquipo(trabajadores))
+  }, [nroTrabajadores, planTocado])
 
   useEffect(() => {
     if (!slug || !slugValido()) {
@@ -233,6 +240,8 @@ export function PaginaCompra() {
     0,
   )
   const totalFormateado = formatearMonto(preciosPais, totalMinor)
+  const trabajadoresValidos = numeroTrabajadoresValido(nroTrabajadores)
+  const equipoEtiqueta = trabajadoresValidos === null ? '—' : etiquetaEquipo(trabajadoresValidos)
 
   function generarSlug(nombre: string) {
     const candidato = nombre
@@ -256,7 +265,7 @@ export function PaginaCompra() {
         slugValido() &&
         estadoSlug !== 'ocupado' &&
         rubroCodigo.length > 0 &&
-        equipo.length > 0
+        numeroTrabajadoresValido(nroTrabajadores) !== null
       )
     }
     if (paso === 2) {
@@ -293,8 +302,10 @@ export function PaginaCompra() {
   }
 
   function aplicarRecomendacion() {
+    const trabajadores = numeroTrabajadoresValido(nroTrabajadores)
+    if (trabajadores === null) return
     setPlanTocado(true)
-    setPlan(recomendacionSegunEquipo(equipo))
+    setPlan(recomendacionSegunEquipo(trabajadores))
     setExtras({})
   }
 
@@ -302,7 +313,7 @@ export function PaginaCompra() {
     setError('')
     setEnviando(true)
     try {
-      const opcionEquipo = OPCIONES_EQUIPO.find((o) => o.valor === equipo)
+      const trabajadores = numeroTrabajadoresValido(nroTrabajadores)
       const respuestas: Record<string, boolean> = {
         ...respuestasNegocio,
         atiende_por_whatsapp: !!plan['whatsapp'],
@@ -314,7 +325,7 @@ export function PaginaCompra() {
         tipo_entidad: tipoEntidad,
         rubro_codigo: rubroCodigo,
         pais: paisIso,
-        equipo_personas: equipo,
+        equipo_personas: trabajadores === null ? null : etiquetaEquipo(trabajadores),
         admin_nombre: adminNombre,
         admin_correo: adminCorreo,
         admin_telefono: adminTelefono || null,
@@ -322,7 +333,7 @@ export function PaginaCompra() {
         necesidades: necesidadesElegidas,
         modulos_extra: extrasElegidos,
         edicion,
-        nro_trabajadores: opcionEquipo?.nro ?? 1,
+        nro_trabajadores: trabajadores ?? 1,
         respuestas,
       })
       setCompraPendiente(compra)
@@ -542,32 +553,33 @@ export function PaginaCompra() {
                     </span>
                   </label>
 
-                  <div>
-                    <span className="mb-2 block text-lg font-semibold text-blanco">
+                  <label className="block">
+                    <span className="mb-1.5 block text-lg font-semibold text-blanco">
                       ¿Para cuántas personas es?
                     </span>
-                    <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
-                      {OPCIONES_EQUIPO.map((opcion) => (
-                        <button
-                          key={opcion.valor}
-                          type="button"
-                          onClick={() => setEquipo(opcion.valor)}
-                          className={`rounded-2xl border px-3 py-3 text-center transition-all ${
-                            equipo === opcion.valor
-                              ? 'border-cian/60 bg-cian/10 text-cian'
-                              : 'border-blanco/10 bg-abisal/60 text-bruma hover:border-blanco/25'
-                          }`}
-                        >
-                          <span className="block text-sm font-semibold">{opcion.etiqueta}</span>
-                          <span className="mt-0.5 block text-[11px] opacity-70">{opcion.ayuda}</span>
-                        </button>
-                      ))}
-                    </div>
-                    <span className="mt-1.5 block text-xs text-bruma/60">
-                      Con esto sugerimos el plan inicial; lo ajustas en el
-                      siguiente paso.
-                    </span>
-                  </div>
+                    <input
+                      type="number"
+                      min={1}
+                      max={MAX_TRABAJADORES}
+                      inputMode="numeric"
+                      className={entrada}
+                      placeholder="1"
+                      value={nroTrabajadores}
+                      onChange={(e) => setNroTrabajadores(e.target.value)}
+                    />
+                    {trabajadoresValidos === null ? (
+                      <span className="mt-1.5 block text-xs text-red-300">
+                        Escribe un número entero de personas (mínimo 1).
+                      </span>
+                    ) : (
+                      <span className="mt-1.5 block text-xs text-bruma/60">
+                        Este número es referencial: es el punto de partida para
+                        calcular tu plan. Después, desde la plataforma, puedes
+                        pedir sumar o quitar trabajadores cuando lo necesites y
+                        tu plan se ajusta solo.
+                      </span>
+                    )}
+                  </label>
 
                   <label className="block">
                     <span className="mb-1.5 block text-lg font-semibold text-blanco">
@@ -977,7 +989,7 @@ export function PaginaCompra() {
                     ['Rubro', rubros.find((r) => r.codigo === rubroCodigo)?.nombre ?? rubroCodigo],
                     [
                       'Equipo',
-                      OPCIONES_EQUIPO.find((o) => o.valor === equipo)?.etiqueta ?? '—',
+                      equipoEtiqueta,
                     ],
                     [
                       'Edición',

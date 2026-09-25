@@ -406,17 +406,6 @@ _PATRON_SLUG = re.compile(r"^[a-z][a-z0-9]*(-[a-z0-9]+)*$")
 
 _EDICIONES_VALIDAS = ("comunicacion", "con_ia")
 
-# Puente temporal (bloque 1): el formulario pregunta por rangos de equipo,
-# no por un número exacto. Mientras llegan las preguntas calificadoras, se
-# manda el tope del rango como `nro_trabajadores` del contrato 8.58.
-_EQUIPO_A_TRABAJADORES = {
-    "solo_yo": 1,
-    "2_a_5": 5,
-    "6_a_15": 15,
-    "16_a_50": 50,
-    "mas_de_50": 51,
-}
-
 
 @router.get("/slug-disponible")
 def consultar_slug_disponible(slug: str, sesion: Session = Depends(get_sesion)):
@@ -534,11 +523,12 @@ def crear_compra(cuerpo: CompraPeticion, sesion: Session = Depends(get_sesion)):
             f"El {pais_datos.get('etiqueta_id_fiscal', 'identificador fiscal')} es obligatorio",
         )
 
-    nro_trabajadores = cuerpo.nro_trabajadores
-    if nro_trabajadores is None:
-        nro_trabajadores = _EQUIPO_A_TRABAJADORES.get(
-            (cuerpo.equipo_personas or "").strip().lower(), 1
-        )
+    # El checkout manda el número exacto de trabajadores que escribió el
+    # dueño. El fallback a 1 solo cubre clientes viejos del formulario de
+    # rangos, que no mandaban el número.
+    nro_trabajadores = (
+        cuerpo.nro_trabajadores if cuerpo.nro_trabajadores is not None else 1
+    )
 
     precios = catalogo_paises.obtener_precios_por_pais(
         _url_precios(valores), pais_datos["iso"]
