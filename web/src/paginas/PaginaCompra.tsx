@@ -3,7 +3,7 @@ import { FondoCircuito } from '../componentes/FondoCircuito'
 import { Marca } from '../componentes/Marca'
 import { api } from '../lib/api'
 import { formatearMonto } from '../lib/paises'
-import type { Compra, NecesidadPublica, Pais } from '../lib/tipos'
+import type { Compra, Pais } from '../lib/tipos'
 import {
   TELEFONO_DIGITOS_POR_PAIS,
   formatearRut,
@@ -37,73 +37,137 @@ function etiquetaEquipo(nroTrabajadores: number): string {
 }
 
 const NECESIDAD_BASE = 'reservas_online'
-const NECESIDAD_IA = 'asistente_ia'
 
-interface PreguntaNegocio {
-  clave: string
+// Siempre incluidos, no se preguntan: `agenda` es la base del plan (se cobra)
+// y `agendamiento_publico` (reservas en línea) va gratis con ella.
+const MODULOS_BASE = ['agenda', 'agendamiento_publico']
+
+interface PreguntaPlan {
+  // Clave de `respuestas` que lee el motor de sugerencias de Calenzia
+  // (reglas.py). `null` = sin clave (encuestas: gratis, no se sugiere).
+  clave: string | null
+  modulo: string
   pregunta: string
-  ayuda: string
+  grupo: 'dia' | 'crece'
 }
 
-const PREGUNTAS_NEGOCIO: PreguntaNegocio[] = [
+const PREGUNTAS_PLAN: PreguntaPlan[] = [
   {
-    clave: 'responde_fuera_de_horario',
-    pregunta: '¿Tus clientes te escriben fuera de tu horario de atención?',
-    ayuda: 'Mensajes por la noche o los fines de semana que hoy quedan para el día siguiente.',
+    clave: 'atiende_por_whatsapp',
+    modulo: 'whatsapp',
+    pregunta: '¿Atiendes por WhatsApp?',
+    grupo: 'dia',
   },
   {
-    clave: 'cotiza_antes_de_atender',
-    pregunta: '¿Cotizas o envías presupuestos antes de atender?',
-    ayuda: 'Precios, condiciones o un PDF antes de confirmar cada cliente.',
+    clave: 'envia_promociones',
+    modulo: 'campanas',
+    pregunta: '¿Haces promociones?',
+    grupo: 'dia',
   },
   {
     clave: 'vende_productos',
-    pregunta: '¿Vendes productos o manejas stock?',
-    ayuda: 'Además de las horas agendadas, llevas productos o reposición.',
+    modulo: 'inventario',
+    pregunta: '¿Vendes productos o stock?',
+    grupo: 'dia',
+  },
+  {
+    clave: 'cotiza_antes_de_atender',
+    modulo: 'presupuestos',
+    pregunta: '¿Envías presupuestos antes de atender?',
+    grupo: 'dia',
   },
   {
     clave: 'necesita_reportes',
-    pregunta: '¿Quieres reportes de cómo va tu negocio?',
-    ayuda: 'Ingresos, ocupación por profesional y comparaciones entre periodos.',
+    modulo: 'reportes_avanzados',
+    pregunta: '¿Quieres reportes de tu negocio?',
+    grupo: 'crece',
   },
   {
     clave: 'quiere_marca_propia',
-    pregunta: '¿Quieres que tu agenda se vea 100% con tu marca?',
-    ayuda: 'Tu logo y tus colores, sin la marca de anayadev.',
+    modulo: 'branding_avanzado',
+    pregunta: '¿Quieres ocultar la marca Calenzia y que todo se vea como tuyo?',
+    grupo: 'crece',
+  },
+  {
+    clave: null,
+    modulo: 'encuestas',
+    pregunta: '¿Quieres hacer encuestas o que tus clientes dejen reseñas?',
+    grupo: 'crece',
   },
 ]
 
-const EDICIONES: {
-  codigo: 'comunicacion' | 'con_ia'
-  nombre: string
-  descripcion: string
-}[] = [
-  {
-    codigo: 'comunicacion',
-    nombre: 'Comunicación',
-    descripcion:
-      'Agenda, recordatorios y mensajes con tus clientes. Tú y tu equipo atienden las conversaciones.',
-  },
-  {
-    codigo: 'con_ia',
-    nombre: 'Con IA',
-    descripcion:
-      'El asistente de IA responde y agenda por ti, incluso fuera de horario, y libera a tu equipo.',
-  },
+const CLAVE_POR_MODULO: Record<string, string> = Object.fromEntries(
+  PREGUNTAS_PLAN.filter(
+    (p): p is PreguntaPlan & { clave: string } => p.clave !== null,
+  ).map((p) => [p.modulo, p.clave]),
+)
+
+const EDICIONES: { codigo: 'comunicacion' | 'con_ia'; nombre: string }[] = [
+  { codigo: 'comunicacion', nombre: 'Comunicación' },
+  { codigo: 'con_ia', nombre: 'Con IA' },
 ]
 
-function recomendacionSegunEquipo(nroTrabajadores: number): Record<string, boolean> {
-  if (nroTrabajadores <= 1) {
-    return { whatsapp: false, crecimiento: false }
-  }
-  if (nroTrabajadores <= 5) {
-    return { whatsapp: true, crecimiento: false }
-  }
-  return { whatsapp: true, crecimiento: true }
+function BotonesSiNo({ valor, alCambiar }: { valor: boolean; alCambiar: () => void }) {
+  return (
+    <div className="flex shrink-0 gap-0.5 rounded-full border border-blanco/15 p-0.5">
+      {[
+        { etiqueta: 'Sí', marcado: true },
+        { etiqueta: 'No', marcado: false },
+      ].map((opcion) => (
+        <button
+          key={String(opcion.marcado)}
+          type="button"
+          onClick={() => {
+            if (valor !== opcion.marcado) alCambiar()
+          }}
+          className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+            valor === opcion.marcado
+              ? 'bg-cian/20 text-cian'
+              : 'text-bruma/60 hover:text-bruma'
+          }`}
+        >
+          {opcion.etiqueta}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function FilaPregunta({
+  pregunta,
+  activo,
+  etiqueta,
+  alCambiar,
+}: {
+  pregunta: string
+  activo: boolean
+  etiqueta: string
+  alCambiar: () => void
+}) {
+  return (
+    <div
+      className={`rounded-2xl border p-4 transition-all ${
+        activo ? 'border-cian/50 bg-cian/5' : 'border-blanco/10 bg-abisal/60'
+      }`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-blanco">{pregunta}</p>
+          <p
+            className={`mt-0.5 text-xs font-semibold ${
+              activo ? 'text-cian/80' : 'text-bruma/60'
+            }`}
+          >
+            {etiqueta}
+          </p>
+        </div>
+        <BotonesSiNo valor={activo} alCambiar={alCambiar} />
+      </div>
+    </div>
+  )
 }
 
 export function PaginaCompra() {
-  const [necesidades, setNecesidades] = useState<NecesidadPublica[]>([])
   const [modulosCatalogo, setModulosCatalogo] = useState<ModuloCatalogo[]>([])
   const [rubros, setRubros] = useState<{ codigo: string; nombre: string }[]>([])
   const [paises, setPaises] = useState<Pais[]>([])
@@ -126,14 +190,19 @@ export function PaginaCompra() {
   const [adminTelefono, setAdminTelefono] = useState('')
   const [idFiscal, setIdFiscal] = useState('')
 
-  const [plan, setPlan] = useState<Record<string, boolean>>({})
-  const [planTocado, setPlanTocado] = useState(false)
-  const [extras, setExtras] = useState<Record<string, boolean>>({})
+  const [respuestasPlan, setRespuestasPlan] = useState<Record<string, boolean>>({
+    responde_fuera_de_horario: false,
+    whatsapp: false,
+    campanas: false,
+    inventario: false,
+    presupuestos: false,
+    reportes_avanzados: false,
+    branding_avanzado: false,
+    encuestas: false,
+  })
+  const [ajustes, setAjustes] = useState<Record<string, boolean>>({})
+  const [ajusteAbierto, setAjusteAbierto] = useState(false)
   const [compraPendiente, setCompraPendiente] = useState<Compra | null>(null)
-  const [edicion, setEdicion] = useState<'comunicacion' | 'con_ia'>('comunicacion')
-  const [respuestasNegocio, setRespuestasNegocio] = useState<Record<string, boolean>>(
-    Object.fromEntries(PREGUNTAS_NEGOCIO.map((p) => [p.clave, false])),
-  )
 
   const [enviando, setEnviando] = useState(false)
   const [error, setError] = useState('')
@@ -143,7 +212,6 @@ export function PaginaCompra() {
     api
       .checkoutCatalogo()
       .then((datos) => {
-        setNecesidades(datos.necesidades)
         setRubros(datos.rubros)
         setModulosCatalogo(datos.modulos ?? [])
         setPaises(datos.paises ?? [])
@@ -179,13 +247,6 @@ export function PaginaCompra() {
   }, [paisIso])
 
   useEffect(() => {
-    if (planTocado) return
-    const trabajadores = numeroTrabajadoresValido(nroTrabajadores)
-    if (trabajadores === null) return
-    setPlan(recomendacionSegunEquipo(trabajadores))
-  }, [nroTrabajadores, planTocado])
-
-  useEffect(() => {
     if (!slug || !slugValido()) {
       setEstadoSlug(null)
       return
@@ -207,41 +268,46 @@ export function PaginaCompra() {
     window.scrollTo({ top: 0, behavior: 'auto' })
   }, [paso])
 
-  const preguntas = necesidades.filter(
-    (n) => n.codigo !== NECESIDAD_BASE && n.codigo !== NECESIDAD_IA,
-  )
-  const codigosCubiertos = new Set(
-    necesidades.flatMap((n) => n.modulos),
-  )
-  const extrasDisponibles = modulosCatalogo.filter((m) => !codigosCubiertos.has(m.codigo))
+  const trabajadoresValidos = numeroTrabajadoresValido(nroTrabajadores)
+  const equipoEtiqueta = trabajadoresValidos === null ? '—' : etiquetaEquipo(trabajadoresValidos)
 
-  const necesidadesElegidas = [
-    NECESIDAD_BASE,
-    ...preguntas.filter((n) => plan[n.codigo]).map((n) => n.codigo),
-  ]
-  const extrasElegidos = extrasDisponibles
-    .filter((m) => extras[m.codigo])
-    .map((m) => m.codigo)
+  // La edición sale de la primera pregunta: «¿Quieres que el sistema responda
+  // solo?» (sí = con_ia). Su clave de respuesta es la que Calenzia ya lee
+  // (`responde_fuera_de_horario`).
+  const edicion = respuestasPlan.responde_fuera_de_horario ? 'con_ia' : 'comunicacion'
 
-  const codigosElegidos = [
-    ...necesidades
-      .filter((n) => necesidadesElegidas.includes(n.codigo))
-      .flatMap((n) => n.modulos),
-    ...extrasElegidos,
+  function moduloActivo(modulo: string): boolean {
+    if (modulo in ajustes) return !!ajustes[modulo]
+    return !!respuestasPlan[modulo]
+  }
+
+  const modulosContratados = [
+    ...MODULOS_BASE,
+    ...PREGUNTAS_PLAN.filter((p) => moduloActivo(p.modulo)).map((p) => p.modulo),
   ]
-  const nombresContratados = [
-    ...necesidades
-      .filter((n) => necesidadesElegidas.includes(n.codigo))
-      .flatMap((n) => n.incluye),
-    ...extrasDisponibles.filter((m) => extrasElegidos.includes(m.codigo)).map((m) => m.nombre),
-  ]
-  const totalMinor = codigosElegidos.reduce(
+
+  function nombreModulo(codigo: string): string {
+    return modulosCatalogo.find((m) => m.codigo === codigo)?.nombre ?? codigo
+  }
+
+  const nombresContratados = modulosContratados.map(nombreModulo)
+  const nombresExtras = PREGUNTAS_PLAN.filter((p) => moduloActivo(p.modulo)).map((p) =>
+    nombreModulo(p.modulo),
+  )
+
+  const totalModulos = modulosContratados.reduce(
     (suma, codigo) => suma + (precios[codigo] ?? 0),
     0,
   )
+  const totalEdicion = (precios[edicion] ?? 0) * (trabajadoresValidos ?? 1)
+  const totalMinor = totalModulos + totalEdicion
   const totalFormateado = formatearMonto(preciosPais, totalMinor)
-  const trabajadoresValidos = numeroTrabajadoresValido(nroTrabajadores)
-  const equipoEtiqueta = trabajadoresValidos === null ? '—' : etiquetaEquipo(trabajadoresValidos)
+
+  function etiquetaPrecio(codigo: string): string {
+    const precio = precios[codigo] ?? 0
+    if (precio <= 0) return 'Incluido — no suma al total'
+    return `Suma ${formatearMonto(preciosPais, precio)}/mes`
+  }
 
   function generarSlug(nombre: string) {
     const candidato = nombre
@@ -288,25 +354,20 @@ export function PaginaCompra() {
     return true
   }
 
-  function alternarPregunta(codigo: string) {
-    setPlanTocado(true)
-    setPlan({ ...plan, [codigo]: !plan[codigo] })
+  function alternarRespuesta(modulo: string) {
+    setRespuestasPlan({ ...respuestasPlan, [modulo]: !respuestasPlan[modulo] })
+    // La pregunta vuelve a mandar: cualquier ajuste manual queda sin efecto.
+    const nuevosAjustes = { ...ajustes }
+    delete nuevosAjustes[modulo]
+    setAjustes(nuevosAjustes)
   }
 
-  function alternarExtra(codigo: string) {
-    setExtras({ ...extras, [codigo]: !extras[codigo] })
+  function elegirEdicion(conIa: boolean) {
+    setRespuestasPlan({ ...respuestasPlan, responde_fuera_de_horario: conIa })
   }
 
-  function responderPregunta(clave: string, valor: boolean) {
-    setRespuestasNegocio({ ...respuestasNegocio, [clave]: valor })
-  }
-
-  function aplicarRecomendacion() {
-    const trabajadores = numeroTrabajadoresValido(nroTrabajadores)
-    if (trabajadores === null) return
-    setPlanTocado(true)
-    setPlan(recomendacionSegunEquipo(trabajadores))
-    setExtras({})
+  function alternarAjuste(modulo: string) {
+    setAjustes({ ...ajustes, [modulo]: !moduloActivo(modulo) })
   }
 
   async function crearPedido() {
@@ -315,9 +376,10 @@ export function PaginaCompra() {
     try {
       const trabajadores = numeroTrabajadoresValido(nroTrabajadores)
       const respuestas: Record<string, boolean> = {
-        ...respuestasNegocio,
-        atiende_por_whatsapp: !!plan['whatsapp'],
-        envia_promociones: !!plan['crecimiento'],
+        responde_fuera_de_horario: edicion === 'con_ia',
+      }
+      for (const [modulo, clave] of Object.entries(CLAVE_POR_MODULO)) {
+        respuestas[clave] = moduloActivo(modulo)
       }
       const compra = await api.crearCompra({
         slug,
@@ -330,8 +392,10 @@ export function PaginaCompra() {
         admin_correo: adminCorreo,
         admin_telefono: adminTelefono || null,
         id_fiscal: idFiscal || null,
-        necesidades: necesidadesElegidas,
-        modulos_extra: extrasElegidos,
+        necesidades: [NECESIDAD_BASE],
+        modulos_extra: PREGUNTAS_PLAN.filter((p) => moduloActivo(p.modulo)).map(
+          (p) => p.modulo,
+        ),
         edicion,
         nro_trabajadores: trabajadores ?? 1,
         respuestas,
@@ -649,15 +713,15 @@ export function PaginaCompra() {
             )}
 
             {paso === 1 && (
-              <div className="space-y-5">
+              <div className="space-y-6">
                 <div>
                   <h2 className="text-lg font-semibold text-blanco">
                     Arma tu plan
                   </h2>
                   <p className="mt-1 text-sm text-bruma">
-                    La agenda con reservas en línea viene incluida. Elige tu
-                    edición y qué más le hace sentido a tu negocio: puedes
-                    cambiarlo cuando quieras.
+                    La agenda con reservas en línea viene incluida. Responde
+                    unas preguntas y tu plan queda armado: cada «sí» suma su
+                    módulo y el total se actualiza solo.
                   </p>
                 </div>
 
@@ -665,14 +729,29 @@ export function PaginaCompra() {
                   <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-bruma/70">
                     Tu edición
                   </span>
+                  <p className="mb-2 text-base font-semibold text-blanco">
+                    ¿Quieres que el sistema responda solo?
+                  </p>
                   <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-                    {EDICIONES.map((opcion) => {
+                    {[
+                      {
+                        codigo: 'con_ia' as const,
+                        etiqueta: 'Sí — Con IA',
+                        detalle:
+                          'El asistente responde y agenda por ti, incluso fuera de horario.',
+                      },
+                      {
+                        codigo: 'comunicacion' as const,
+                        etiqueta: 'No — Comunicación',
+                        detalle: 'Tú y tu equipo atienden las conversaciones.',
+                      },
+                    ].map((opcion) => {
                       const activo = edicion === opcion.codigo
                       return (
                         <button
                           key={opcion.codigo}
                           type="button"
-                          onClick={() => setEdicion(opcion.codigo)}
+                          onClick={() => elegirEdicion(opcion.codigo === 'con_ia')}
                           className={`rounded-2xl border p-4 text-left transition-all ${
                             activo
                               ? 'border-cian/60 bg-cian/10 shadow-[0_0_26px_-14px_rgba(0,223,240,0.6)]'
@@ -681,7 +760,7 @@ export function PaginaCompra() {
                         >
                           <span className="flex items-center justify-between gap-2">
                             <span className="text-sm font-semibold text-blanco">
-                              {opcion.nombre}
+                              {opcion.etiqueta}
                             </span>
                             <span
                               className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[11px] font-bold ${
@@ -694,175 +773,135 @@ export function PaginaCompra() {
                             </span>
                           </span>
                           <span className="mt-1 block text-xs leading-relaxed text-bruma">
-                            {opcion.descripcion}
+                            {opcion.detalle}
+                          </span>
+                          <span className="mt-1.5 block text-xs font-semibold text-cian">
+                            {formatearMonto(preciosPais, precios[opcion.codigo] ?? 0)} /
+                            persona / mes
                           </span>
                         </button>
                       )
                     })}
                   </div>
-                  <span className="mt-1.5 block text-xs text-bruma/60">
-                    Con IA, el asistente responde y agenda solo fuera de
-                    horario; sin IA, todo queda en manos de tu equipo.
+                </div>
+
+                <div>
+                  <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-bruma/70">
+                    Tu día a día
+                  </span>
+                  <div className="space-y-2.5">
+                    {PREGUNTAS_PLAN.filter((p) => p.grupo === 'dia').map((pregunta) => (
+                      <FilaPregunta
+                        key={pregunta.modulo}
+                        pregunta={pregunta.pregunta}
+                        activo={moduloActivo(pregunta.modulo)}
+                        etiqueta={etiquetaPrecio(pregunta.modulo)}
+                        alCambiar={() => alternarRespuesta(pregunta.modulo)}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-bruma/70">
+                    Marca y crecimiento
+                  </span>
+                  <div className="space-y-2.5">
+                    {PREGUNTAS_PLAN.filter((p) => p.grupo === 'crece').map((pregunta) => (
+                      <FilaPregunta
+                        key={pregunta.modulo}
+                        pregunta={pregunta.pregunta}
+                        activo={moduloActivo(pregunta.modulo)}
+                        etiqueta={etiquetaPrecio(pregunta.modulo)}
+                        alCambiar={() => alternarRespuesta(pregunta.modulo)}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between rounded-2xl border border-cian/30 bg-cian/5 px-5 py-4">
+                  <div>
+                    <span className="block text-sm font-semibold text-bruma">
+                      Total mensual
+                    </span>
+                    <span className="block text-xs text-bruma/60">
+                      para {equipoEtiqueta} — la edición se cobra por persona
+                    </span>
+                  </div>
+                  <span className="text-2xl font-bold texto-gradiente">
+                    {totalFormateado}
                   </span>
                 </div>
 
-                <div className="space-y-3">
-                  {preguntas.map((necesidad) => {
-                    const activo = !!plan[necesidad.codigo]
-                    return (
-                      <button
-                        key={necesidad.codigo}
-                        type="button"
-                        onClick={() => alternarPregunta(necesidad.codigo)}
-                        className={`w-full cursor-pointer rounded-2xl border p-4 text-left transition-all sm:p-5 ${
-                          activo
-                            ? 'border-cian/50 bg-cian/5 shadow-[0_0_26px_-14px_rgba(0,223,240,0.6)]'
-                            : 'border-blanco/10 bg-abisal/60 hover:border-blanco/25'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="text-base font-semibold text-blanco">
-                              {necesidad.etiqueta}
-                            </p>
-                            <p className="mt-1 text-sm leading-relaxed text-bruma">
-                              {necesidad.ayuda}
-                            </p>
-                          </div>
-                          <span
-                            className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs font-bold ${
-                              activo
-                                ? 'border-turquesa bg-turquesa/20 text-turquesa'
-                                : 'border-blanco/25 text-transparent'
-                            }`}
-                          >
-                            ✓
-                          </span>
-                        </div>
-                      </button>
-                    )
-                  })}
-                </div>
-
-                {extrasDisponibles.length > 0 && (
-                  <div>
-                    <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-bruma/70">
-                      Extras (opcionales)
+                <div className="rounded-2xl border border-blanco/10 bg-abisal/60 p-4">
+                  <p className="text-sm leading-relaxed text-bruma">
+                    <span className="font-semibold text-blanco">Tu plan:</span>{' '}
+                    {EDICIONES.find((o) => o.codigo === edicion)?.nombre} (×
+                    {trabajadoresValidos ?? 1})
+                    {nombresExtras.length > 0 && `, ${nombresExtras.join(', ')}`} ={' '}
+                    <span className="font-semibold text-cian">
+                      {totalFormateado}/mes
                     </span>
-                    <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-                      {extrasDisponibles.map((modulo) => {
-                        const activo = !!extras[modulo.codigo]
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setAjusteAbierto((abierto) => !abierto)}
+                    className="mt-3 text-sm font-semibold text-cian hover:text-turquesa"
+                  >
+                    {ajusteAbierto ? 'Ocultar ajustes' : '¿Quieres afinar tu plan?'}
+                  </button>
+                  {ajusteAbierto && (
+                    <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      {PREGUNTAS_PLAN.map((pregunta) => {
+                        const activo = moduloActivo(pregunta.modulo)
+                        const precio = precios[pregunta.modulo] ?? 0
                         return (
                           <button
-                            key={modulo.codigo}
+                            key={pregunta.modulo}
                             type="button"
-                            onClick={() => alternarExtra(modulo.codigo)}
-                            className={`flex items-start gap-3 rounded-2xl border p-3.5 text-left transition-all ${
+                            onClick={() => alternarAjuste(pregunta.modulo)}
+                            className={`flex items-center gap-3 rounded-xl border px-3.5 py-2.5 text-left transition-all ${
                               activo
-                                ? 'border-violeta/50 bg-violeta/5'
+                                ? 'border-cian/50 bg-cian/5'
                                 : 'border-blanco/10 bg-abisal/60 hover:border-blanco/25'
                             }`}
                           >
                             <span
-                              className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border text-[11px] font-bold ${
+                              className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border text-[11px] font-bold ${
                                 activo
-                                  ? 'border-violeta bg-violeta/25 text-violeta'
+                                  ? 'border-turquesa bg-turquesa/20 text-turquesa'
                                   : 'border-blanco/25 text-transparent'
                               }`}
                             >
                               ✓
                             </span>
-                            <span>
+                            <span className="flex-1">
                               <span className="block text-sm font-semibold text-blanco">
-                                {modulo.nombre}
+                                {nombreModulo(pregunta.modulo)}
                               </span>
-                              <span className="mt-0.5 block text-xs leading-relaxed text-bruma">
-                                {modulo.descripcion}
+                              <span className="block text-xs text-bruma/70">
+                                {precio > 0
+                                  ? `${formatearMonto(preciosPais, precio)}/mes`
+                                  : 'Incluido'}
                               </span>
                             </span>
                           </button>
                         )
                       })}
                     </div>
-                  </div>
-                )}
-
-                <div className="flex items-center justify-between rounded-2xl border border-cian/30 bg-cian/5 px-5 py-4">
-                  <span className="text-sm font-semibold text-bruma">Total mensual</span>
-                  <span className="text-2xl font-bold texto-gradiente">
-                    {totalFormateado}
-                  </span>
-                </div>
-
-                <div>
-                  <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-bruma/70">
-                    Así trabaja tu negocio
-                  </span>
-                  <div className="space-y-2.5">
-                    {PREGUNTAS_NEGOCIO.map((pregunta) => {
-                      const valor = !!respuestasNegocio[pregunta.clave]
-                      return (
-                        <div
-                          key={pregunta.clave}
-                          className="rounded-2xl border border-blanco/10 bg-abisal/60 p-4"
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <p className="text-sm font-semibold text-blanco">
-                                {pregunta.pregunta}
-                              </p>
-                              <p className="mt-0.5 text-xs leading-relaxed text-bruma">
-                                {pregunta.ayuda}
-                              </p>
-                            </div>
-                            <div className="flex shrink-0 gap-0.5 rounded-full border border-blanco/15 p-0.5">
-                              {[
-                                { etiqueta: 'Sí', valor: true },
-                                { etiqueta: 'No', valor: false },
-                              ].map((opcion) => (
-                                <button
-                                  key={String(opcion.valor)}
-                                  type="button"
-                                  onClick={() =>
-                                    responderPregunta(pregunta.clave, opcion.valor)
-                                  }
-                                  className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
-                                    valor === opcion.valor
-                                      ? 'bg-cian/20 text-cian'
-                                      : 'text-bruma/60 hover:text-bruma'
-                                  }`}
-                                >
-                                  {opcion.etiqueta}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                  <p className="mt-2 text-xs leading-relaxed text-bruma/60">
-                    Con tus respuestas te proponemos lo que mejor te calza.
-                    No es un examen: lo que no te haga sentido, déjalo en
-                    «No» y lo revisamos contigo.
+                  )}
+                  <p className="mt-3 text-xs leading-relaxed text-bruma/60">
+                    Los límites de tu plan se ajustan al tamaño de tu equipo.
+                    ¿Necesitas algo más especial?{' '}
+                    <a
+                      href="/#contacto"
+                      className="font-semibold text-cian hover:text-turquesa"
+                    >
+                      Conversemos y lo armamos contigo
+                    </a>
+                    .
                   </p>
                 </div>
-
-                <button
-                  type="button"
-                  onClick={aplicarRecomendacion}
-                  className="w-full rounded-2xl border border-dashed border-violeta/40 bg-violeta/5 px-4 py-3.5 text-sm font-semibold text-violeta transition-colors hover:bg-violeta/10"
-                >
-                  ¿No estás seguro? Te recomendamos lo esencial para tu equipo
-                </button>
-                <p className="text-xs leading-relaxed text-bruma/60">
-                  Los límites de tu plan se ajustan al tamaño de tu equipo.
-                  ¿Necesitas algo más especial?{' '}
-                  <a href="/#contacto" className="font-semibold text-cian hover:text-turquesa">
-                    Conversemos y lo armamos contigo
-                  </a>
-                  .
-                </p>
               </div>
             )}
 
