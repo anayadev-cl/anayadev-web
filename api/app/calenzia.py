@@ -16,6 +16,8 @@ import json
 import logging
 import urllib.error
 import urllib.request
+from pathlib import Path
+from uuid import uuid4
 
 log = logging.getLogger("anayadev.calenzia")
 
@@ -88,9 +90,11 @@ def obtener_solicitud_publica(url_base: str, token: str) -> tuple[int, dict | No
     Devuelve (codigo_http, dict) con el JSON tal cual lo entrega Calenzia
     (contrato 8.58, sin transformarlo): estado, negocio_nombre, slug, pais,
     edicion, nro_trabajadores, modulos (códigos), sugerencias, creado_en y,
-    solo si está aprobada/activa, moneda/simbolo_moneda/decimales/
-    total_primera_factura. Un token inexistente viaja como (404, None); un
-    error de red o una respuesta inesperada, como (0, None).
+    solo si está aprobada/en_prueba/activa, moneda/simbolo_moneda/decimales/
+    total_primera_factura; desde A.3 suma `tenant_estado` y el bloque `pago`
+    (cobro del ciclo: estado, total, vencimiento, glosa y voucher).
+    Un token inexistente viaja como (404, None); un error de red o una
+    respuesta inesperada, como (0, None).
     """
     destino = f"{url_base.rstrip('/')}/api/v1/publico/onboarding/solicitud/{token}"
     try:
@@ -103,4 +107,49 @@ def obtener_solicitud_publica(url_base: str, token: str) -> tuple[int, dict | No
         return exc.code, None
     except Exception:
         log.exception("No se pudo consultar la solicitud de onboarding")
+        return 0, None
+
+
+def subir_voucher_solicitud(
+    url_base: str, token: str, cobro_id: str, contenido: bytes, nombre: str
+) -> tuple[int, dict | None]:
+    """POST /publico/onboarding/solicitud/{token}/cobros/{cobro_id}/voucher (A.3).
+
+    Reenvía el comprobante del landing en multipart/form-data (el campo se
+    llama `archivo`, igual que en Calenzia). Devuelve (codigo_http, dict) con
+    el JSON de respuesta o None: (200, {cobro_id, voucher_url, estado,
+    subido_en}), (404/409/422/502, None con el detalle perdido) o (0, None)
+    ante un error de red.
+    """
+    destino = (
+        f"{url_base.rstrip('/')}/api/v1/publico/onboarding/solicitud/{token}"
+        f"/cobros/{cobro_id}/voucher"
+    )
+    borde = uuid4().hex
+    nombre_seguro = Path(nombre or "comprobante").name
+    cuerpo = (
+        f"--{borde}\r\n"
+        f'Content-Disposition: form-data; name="archivo"; filename="{nombre_seguro}"\r\n'
+        "Content-Type: application/octet-stream\r\n\r\n"
+    ).encode("utf-8")
+    cuerpo += contenido + f"\r\n--{borde}--\r\n".encode("utf-8")
+
+    peticion = urllib.request.Request(
+        destino,
+        data=cuerpo,
+        headers={"Content-Type": f"multipart/form-data; boundary={borde}"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(peticion, timeout=20) as respuesta:
+            datos = json.loads(respuesta.read().decode("utf-8"))
+            return respuesta.status, datos if isinstance(datos, dict) else None
+    except urllib.error.HTTPError as exc:
+        try:
+            detalle = json.loads(exc.read().decode("utf-8", errors="replace"))
+            return exc.code, detalle if isinstance(detalle, dict) else None
+        except Exception:
+            return exc.code, None
+    except Exception:
+        log.exception("No se pudo subir el comprobante a Calenzia")
         return 0, None
