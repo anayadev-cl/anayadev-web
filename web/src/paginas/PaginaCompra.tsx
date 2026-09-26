@@ -202,7 +202,6 @@ export function PaginaCompra() {
   })
   const [ajustes, setAjustes] = useState<Record<string, boolean>>({})
   const [ajusteAbierto, setAjusteAbierto] = useState(false)
-  const [compraPendiente, setCompraPendiente] = useState<Compra | null>(null)
 
   const [enviando, setEnviando] = useState(false)
   const [error, setError] = useState('')
@@ -370,7 +369,9 @@ export function PaginaCompra() {
     setAjustes({ ...ajustes, [modulo]: !moduloActivo(modulo) })
   }
 
-  async function crearPedido() {
+  // Pulido 2: un solo botón — crea el pedido y lo envía al webhook de una.
+  // Antes eran dos clics ("Revisar solicitud" y luego "Enviar mi solicitud").
+  async function enviarSolicitud() {
     setError('')
     setEnviando(true)
     try {
@@ -400,21 +401,8 @@ export function PaginaCompra() {
         nro_trabajadores: trabajadores ?? 1,
         respuestas,
       })
-      setCompraPendiente(compra)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'No se pudo crear el pedido')
-    } finally {
-      setEnviando(false)
-    }
-  }
-
-  async function finalizar() {
-    if (!compraPendiente) return
-    setError('')
-    setEnviando(true)
-    try {
-      const compra = await api.enviarSolicitud(compraPendiente.id)
-      setResultado(compra)
+      const enviada = await api.enviarSolicitud(compra.id)
+      setResultado(enviada)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo enviar la solicitud')
     } finally {
@@ -524,24 +512,43 @@ export function PaginaCompra() {
         <ol className="mt-10 flex items-center justify-center gap-1 sm:gap-2">
           {PASOS.map((etiqueta, i) => (
             <li key={etiqueta} className="flex items-center gap-1 sm:gap-2">
-              <span
-                className={`flex h-8 w-8 items-center justify-center rounded-full border text-xs font-bold ${
+              {/* Pulido 3: los pasos YA visitados son clicables para volver
+                  sin perder lo cargado (el estado vive en el componente). */}
+              <button
+                type="button"
+                disabled={i >= paso}
+                onClick={() => setPaso(i)}
+                title={i < paso ? `Volver a ${etiqueta}` : undefined}
+                aria-label={i < paso ? `Volver a ${etiqueta}` : etiqueta}
+                className={`group flex items-center gap-1 sm:gap-2 ${
                   i < paso
-                    ? 'border-turquesa/50 bg-turquesa/10 text-turquesa'
-                    : i === paso
-                      ? 'border-cian/60 bg-cian/10 text-cian'
-                      : 'border-blanco/15 text-bruma/60'
+                    ? 'cursor-pointer'
+                    : 'cursor-default'
                 }`}
               >
-                {i < paso ? '✓' : i + 1}
-              </span>
-              <span
-                className={`hidden text-xs font-semibold sm:block ${
-                  i === paso ? 'text-blanco' : 'text-bruma/60'
-                }`}
-              >
-                {etiqueta}
-              </span>
+                <span
+                  className={`flex h-8 w-8 items-center justify-center rounded-full border text-xs font-bold transition-all ${
+                    i < paso
+                      ? 'border-turquesa/50 bg-turquesa/10 text-turquesa group-hover:border-turquesa group-hover:bg-turquesa/25'
+                      : i === paso
+                        ? 'border-cian/60 bg-cian/10 text-cian'
+                        : 'border-blanco/15 text-bruma/60'
+                  }`}
+                >
+                  {i < paso ? '✓' : i + 1}
+                </span>
+                <span
+                  className={`hidden text-xs font-semibold sm:block ${
+                    i === paso
+                      ? 'text-blanco'
+                      : i < paso
+                        ? 'text-bruma/70 underline-offset-4 group-hover:text-cian group-hover:underline'
+                        : 'text-bruma/60'
+                  }`}
+                >
+                  {etiqueta}
+                </span>
+              </button>
               {i < PASOS.length - 1 && (
                 <span className="mx-1 h-px w-6 bg-blanco/15 sm:w-10" />
               )}
@@ -1065,14 +1072,12 @@ export function PaginaCompra() {
                   </div>
                 </dl>
 
-                {compraPendiente && (
-                  <p className="rounded-xl border border-blanco/10 bg-abisal/60 px-4 py-3 text-xs leading-relaxed text-bruma">
-                    Al enviar, te mandamos un correo con todo lo que quedó
-                    registrado. Nuestro equipo confirma contigo el paquete
-                    final y coordina la activación y el pago. No pagas nada
-                    ahora.
-                  </p>
-                )}
+                <p className="rounded-xl border border-blanco/10 bg-abisal/60 px-4 py-3 text-xs leading-relaxed text-bruma">
+                  Al enviar, te mandamos un correo con todo lo que quedó
+                  registrado. Nuestro equipo confirma contigo el paquete
+                  final y coordina la activación y el pago. No pagas nada
+                  ahora.
+                </p>
               </div>
             )}
 
@@ -1094,23 +1099,14 @@ export function PaginaCompra() {
                 >
                   Continuar →
                 </button>
-              ) : compraPendiente ? (
-                <button
-                  type="button"
-                  disabled={enviando}
-                  onClick={() => void finalizar()}
-                  className="rounded-full bg-gradient-to-r from-violeta via-electrica to-cian px-7 py-3 text-sm font-semibold text-blanco transition-all hover:shadow-[0_0_30px_-8px_rgba(0,223,240,0.6)] disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {enviando ? 'Enviando…' : 'Enviar mi solicitud'}
-                </button>
               ) : (
                 <button
                   type="button"
                   disabled={enviando}
-                  onClick={() => void crearPedido()}
+                  onClick={() => void enviarSolicitud()}
                   className="rounded-full bg-gradient-to-r from-violeta via-electrica to-cian px-7 py-3 text-sm font-semibold text-blanco transition-all hover:shadow-[0_0_30px_-8px_rgba(0,223,240,0.6)] disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {enviando ? 'Preparando…' : 'Revisar solicitud →'}
+                  {enviando ? 'Enviando…' : 'Enviar mi solicitud'}
                 </button>
               )}
             </div>
