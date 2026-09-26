@@ -402,6 +402,38 @@ def ver_solicitud_publica(token: str, sesion: Session = Depends(get_sesion)):
     return {**solicitud, "modulos_nombre": nombres}
 
 
+@router.post("/onboarding/solicitud/{token}/cobros/{cobro_id}/voucher")
+def subir_voucher_solicitud(
+    token: str,
+    cobro_id: str,
+    archivo: UploadFile = File(...),
+    sesion: Session = Depends(get_sesion),
+):
+    """Adjunta el comprobante desde el landing (A.3), proxy a Calenzia.
+
+    El landing de `anayadev-web` no puede llamar a Calenzia directo (CORS):
+    este proxy reenvía el multipart al endpoint público por token de la
+    solicitud. No guarda nada local: el comprobante vive en Calenzia.
+    """
+    url = _url_calenzia(sesion)
+    if not url:
+        raise HTTPException(502, "No pudimos subir tu comprobante. Intenta más tarde.")
+
+    contenido = archivo.file.read()
+    codigo, datos = integracion_calenzia.subir_voucher_solicitud(
+        url, token, cobro_id, contenido, archivo.filename or "comprobante"
+    )
+    if codigo == 200 and isinstance(datos, dict):
+        return datos
+
+    detalle = (datos or {}).get("detail") if isinstance(datos, dict) else None
+    codigo_salida = codigo if codigo in (404, 409, 410, 422, 502) else 502
+    raise HTTPException(
+        codigo_salida,
+        detalle if isinstance(detalle, str) else "No pudimos subir tu comprobante.",
+    )
+
+
 _PATRON_SLUG = re.compile(r"^[a-z][a-z0-9]*(-[a-z0-9]+)*$")
 
 _EDICIONES_VALIDAS = ("comunicacion", "con_ia")

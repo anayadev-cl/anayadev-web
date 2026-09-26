@@ -122,6 +122,21 @@ export const api = {
       await pedir(`/api/v1/publico/onboarding/solicitud/${encodeURIComponent(token)}`)
     ).json(),
 
+  subirVoucherSolicitud: async (
+    token: string,
+    cobroId: string,
+    archivo: File,
+  ): Promise<{ cobro_id: string; voucher_url: string; estado: string; subido_en: string }> => {
+    const formulario = new FormData()
+    formulario.append('archivo', archivo)
+    return (
+      await pedir(
+        `/api/v1/publico/onboarding/solicitud/${encodeURIComponent(token)}/cobros/${cobroId}/voucher`,
+        { method: 'POST', body: formulario },
+      )
+    ).json()
+  },
+
   login: async (usuario: string, clave: string) => {
     const respuesta = await pedir('/api/v1/admin/login', {
       method: 'POST',

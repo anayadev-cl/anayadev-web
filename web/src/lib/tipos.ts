@@ -129,8 +129,25 @@ export interface SugerenciaCalenzia {
   aceptada: boolean | null
 }
 
+export interface PagoSolicitudLanding {
+  cobro_id: string
+  total: number
+  vencimiento_pago?: string | null
+  glosa: string
+  estado: 'por_pagar' | 'pagado'
+  voucher_url?: string | null
+  voucher_subido_en?: string | null
+}
+
 export interface SolicitudLanding {
-  estado: 'solicitada' | 'en_revision' | 'aprobada' | 'activa' | 'rechazada' | 'expirada'
+  estado:
+    | 'solicitada'
+    | 'en_revision'
+    | 'aprobada'
+    | 'en_prueba'
+    | 'activa'
+    | 'rechazada'
+    | 'expirada'
   negocio_nombre: string
   slug: string
   glosa?: string | null
@@ -145,6 +162,10 @@ export interface SolicitudLanding {
   total_primera_factura?: number | null
   creado_en: string
   modulos_nombre?: Record<string, string>
+  /** A.3: estado REAL del tenant (prueba/activo/moroso/…), null antes del provisioning. */
+  tenant_estado?: string | null
+  /** A.3: cobro del ciclo del tenant (estado, total, vencimiento, glosa, voucher). */
+  pago?: PagoSolicitudLanding | null
 }
 
 export interface MetodoPagoPublico {
