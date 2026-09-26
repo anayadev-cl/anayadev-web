@@ -32,7 +32,7 @@ from ..modelos import (
     RubroCheckout,
     Seccion,
 )
-from ..webhook import enviar_webhook_onboarding, total_modulos
+from ..webhook import enviar_webhook_onboarding
 
 router = APIRouter()
 
@@ -576,11 +576,15 @@ def crear_compra(cuerpo: CompraPeticion, sesion: Session = Depends(get_sesion)):
         }
         for codigo_modulo in codigos_seleccionados
     ]
-    total_minor = (
-        sum(m["precio_mensual_clp"] for m in modulos_seleccionados)
-        if precios is not None
-        else None
-    )
+    # Pulido 1 (bug de dinero): el total debe calcularse IGUAL que el
+    # checkout — (precio_edicion × nro_trabajadores) + Σ módulos. Antes solo
+    # se sumaban los módulos y el correo "Recibimos tu solicitud" mostraba
+    # un total menor que el que el cliente vio en /comprar.
+    total_minor = None
+    if precios is not None:
+        total_modulos_minor = sum(m["precio_mensual_clp"] for m in modulos_seleccionados)
+        total_edicion = precios.get(edicion, 0) * nro_trabajadores
+        total_minor = total_modulos_minor + total_edicion
     total_monto = (
         catalogo_paises.formatear_monto(total_minor, pais_datos)
         if total_minor is not None
@@ -618,7 +622,8 @@ def crear_compra(cuerpo: CompraPeticion, sesion: Session = Depends(get_sesion)):
             "respuestas": dict(cuerpo.respuestas or {}),
         },
         modulos=modulos_seleccionados,
-        total_clp=total_modulos(modulos_seleccionados),
+        # Mismo total que el checkout (unidades menores, edición incluida).
+        total_clp=total_minor if total_minor is not None else 0,
     )
     sesion.add(compra)
     sesion.commit()
