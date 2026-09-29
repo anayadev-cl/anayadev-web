@@ -137,6 +137,34 @@ export const api = {
     ).json()
   },
 
+  // Abonos: declara UNA transferencia (monto + comprobante); la respuesta
+  // trae `pagado_total`/`saldo` para mostrar cuánto falta.
+  subirAbonoSolicitud: async (
+    token: string,
+    cobroId: string,
+    monto: number,
+    archivo: File,
+  ): Promise<{
+    abono_id: string
+    cobro_id: string
+    monto: number
+    voucher_url: string | null
+    verificado_en: string | null
+    pagado_total: number
+    saldo: number
+    completado: boolean
+  }> => {
+    const formulario = new FormData()
+    formulario.append('monto', String(monto))
+    formulario.append('archivo', archivo)
+    return (
+      await pedir(
+        `/api/v1/publico/onboarding/solicitud/${encodeURIComponent(token)}/cobros/${cobroId}/abonos`,
+        { method: 'POST', body: formulario },
+      )
+    ).json()
+  },
+
   login: async (usuario: string, clave: string) => {
     const respuesta = await pedir('/api/v1/admin/login', {
       method: 'POST',

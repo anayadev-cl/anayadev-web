@@ -25,6 +25,10 @@ class Ajustes(BaseSettings):
     smtp_usuario: str = ""
     smtp_clave: str = ""
     smtp_tls: bool = True
+    # Logo de Calenzia para el header de los correos (R-CORREO, 2026-09-28).
+    # Mismo recurso que usa el API de Calenzia (anayadev_logo_url): servido
+    # desde anayadev.cl, estable y público.
+    logo_calenzia_url: str = "https://anayadev.cl/calenzia1.png"
     calenzia_api_url: str = "https://api.agenda.anayadev.cl"
     calenzia_paises_url: str = "https://api.agenda.anayadev.cl/api/v1/publico/paises"
     calenzia_precios_url: str = "https://api.agenda.anayadev.cl/api/v1/publico/precios?pais={pais}"

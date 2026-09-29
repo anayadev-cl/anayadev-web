@@ -332,23 +332,35 @@ function TarjetaPago({
   const pago = solicitud.pago
   const [subiendo, setSubiendo] = useState(false)
   const [subido, setSubido] = useState(false)
+  const [monto, setMonto] = useState('')
+  const [saldo, setSaldo] = useState<number | null>(pago?.saldo ?? null)
   const [error, setError] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
   const glosa = pago?.glosa || solicitud.glosa || ''
   const totalMinor = pago?.total ?? solicitud.total_primera_factura
+  const pagadoMinor = pago?.pagado_total ?? 0
   const puedeAdjuntar = pago != null && pago.estado === 'por_pagar' && !subido
   const vencimiento = fechaLegible(pago?.vencimiento_pago)
 
   async function adjuntar(archivo: File | null) {
     if (!archivo || !pago) return
+    const montoEntero = Number(monto)
+    if (!Number.isFinite(montoEntero) || montoEntero <= 0) {
+      setError('Indica el monto de ESTA transferencia antes de subir el comprobante.')
+      return
+    }
     setError('')
     setSubiendo(true)
     try {
-      await api.subirVoucherSolicitud(token, pago.cobro_id, archivo)
-      setSubido(true)
+      const resultado = await api.subirAbonoSolicitud(token, pago.cobro_id, montoEntero, archivo)
+      setSaldo(resultado.saldo)
+      if (resultado.completado) {
+        setSubido(true)
+      }
+      setMonto('')
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'No pudimos adjuntar tu comprobante.')
+      setError(e instanceof Error ? e.message : 'No pudimos registrar tu abono.')
     } finally {
       setSubiendo(false)
       if (inputRef.current) inputRef.current.value = ''
@@ -374,7 +386,9 @@ function TarjetaPago({
 
       {totalMinor != null && solicitud.moneda && (
         <div className="mt-4 flex items-center justify-between rounded-2xl border border-blanco/10 bg-abisal/60 px-5 py-4">
-          <span className="text-sm font-semibold text-bruma">Total a pagar</span>
+          <span className="text-sm font-semibold text-bruma">
+            {pago?.estado === 'pagado' ? 'Total a pagar' : 'Saldo pendiente'}
+          </span>
           <span className="text-2xl font-bold texto-gradiente">
             {formatearMontoMoneda(
               {
@@ -382,10 +396,33 @@ function TarjetaPago({
                 simbolo_moneda: solicitud.simbolo_moneda,
                 decimales: solicitud.decimales,
               },
-              totalMinor,
+              saldo ?? totalMinor,
             )}
           </span>
         </div>
+      )}
+      {pagadoMinor > 0 && saldo !== null && pago?.estado === 'por_pagar' && (
+        <p className="mt-2 text-xs font-semibold text-turquesa">
+          Ya pagaste{' '}
+          {formatearMontoMoneda(
+            {
+              moneda: solicitud.moneda,
+              simbolo_moneda: solicitud.simbolo_moneda,
+              decimales: solicitud.decimales,
+            },
+            pagadoMinor,
+          )}{' '}
+          — te faltan{' '}
+          {formatearMontoMoneda(
+            {
+              moneda: solicitud.moneda,
+              simbolo_moneda: solicitud.simbolo_moneda,
+              decimales: solicitud.decimales,
+            },
+            saldo ?? totalMinor,
+          )}
+          . Puedes seguir pagando en partes.
+        </p>
       )}
       {exigible && vencimiento && (
         <p className="mt-2 text-xs font-semibold text-turquesa">Vence el {vencimiento}</p>
@@ -426,6 +463,28 @@ function TarjetaPago({
 
       {puedeAdjuntar && (
         <div className="mt-5">
+          <label className="mb-1 block text-xs font-semibold text-bruma">
+            Monto de ESTA transferencia (puedes pagar en partes)
+          </label>
+          <input
+            type="number"
+            min={1}
+            value={monto}
+            onChange={(e) => setMonto(e.target.value)}
+            placeholder={
+              solicitud.moneda
+                ? formatearMontoMoneda(
+                    {
+                      moneda: solicitud.moneda,
+                      simbolo_moneda: solicitud.simbolo_moneda,
+                      decimales: solicitud.decimales,
+                    },
+                    saldo ?? totalMinor ?? 0,
+                  )
+                : 'Monto'
+            }
+            className="mb-3 w-full rounded-2xl border border-blanco/10 bg-abisal/60 px-4 py-3 text-sm text-blanco placeholder:text-bruma/40 focus:outline-none focus:ring-1 focus:ring-cian/50"
+          />
           <input
             ref={inputRef}
             type="file"
@@ -443,7 +502,7 @@ function TarjetaPago({
                 : 'border border-cian/40 text-cian hover:bg-cian/10'
             }`}
           >
-            {subiendo ? 'Subiendo…' : pago?.voucher_url ? 'Reemplazar comprobante' : 'Adjuntar comprobante'}
+            {subiendo ? 'Subiendo…' : 'Declarar abono (monto + comprobante)'}
           </button>
           {pago?.voucher_url && !subido && (
             <a
@@ -452,15 +511,15 @@ function TarjetaPago({
               rel="noreferrer"
               className="ml-3 text-xs font-semibold text-cian underline hover:text-turquesa"
             >
-              Ver comprobante
+              Ver comprobante anterior
             </a>
           )}
         </div>
       )}
       {subido && (
         <p className="mt-4 rounded-xl border border-turquesa/30 bg-turquesa/10 px-4 py-3 text-sm text-turquesa">
-          Recibimos tu comprobante: lo estamos verificando. Cuando el equipo lo
-          confirme, tu cuenta queda al día. ¡Gracias!
+          ¡Cobro completo! Recibimos tus abonos y los estamos verificando.
+          Cuando el equipo los confirme, tu cuenta queda al día.
         </p>
       )}
       {error && (

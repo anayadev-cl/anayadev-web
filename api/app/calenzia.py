@@ -153,3 +153,52 @@ def subir_voucher_solicitud(
     except Exception:
         log.exception("No se pudo subir el comprobante a Calenzia")
         return 0, None
+
+
+def subir_abono_solicitud(
+    url_base: str,
+    token: str,
+    cobro_id: str,
+    monto: int,
+    contenido: bytes,
+    nombre: str,
+) -> tuple[int, dict | None]:
+    """POST .../cobros/{cobro_id}/abonos — declara UN abono (monto + comprobante).
+
+    Abonos: cada transferencia es un abono pendiente de validación. La
+    respuesta trae `pagado_total`/`saldo` para mostrar cuánto falta.
+    """
+    destino = (
+        f"{url_base.rstrip('/')}/api/v1/publico/onboarding/solicitud/{token}"
+        f"/cobros/{cobro_id}/abonos"
+    )
+    borde = uuid4().hex
+    nombre_seguro = Path(nombre or "comprobante").name
+    cuerpo = (
+        f"--{borde}\r\n"
+        f'Content-Disposition: form-data; name="monto"\r\n\r\n{monto}\r\n'
+        f"--{borde}\r\n"
+        f'Content-Disposition: form-data; name="archivo"; filename="{nombre_seguro}"\r\n'
+        "Content-Type: application/octet-stream\r\n\r\n"
+    ).encode("utf-8")
+    cuerpo += contenido + f"\r\n--{borde}--\r\n".encode("utf-8")
+
+    peticion = urllib.request.Request(
+        destino,
+        data=cuerpo,
+        headers={"Content-Type": f"multipart/form-data; boundary={borde}"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(peticion, timeout=20) as respuesta:
+            datos = json.loads(respuesta.read().decode("utf-8"))
+            return respuesta.status, datos if isinstance(datos, dict) else None
+    except urllib.error.HTTPError as exc:
+        try:
+            detalle = json.loads(exc.read().decode("utf-8", errors="replace"))
+            return exc.code, detalle if isinstance(detalle, dict) else None
+        except Exception:
+            return exc.code, None
+    except Exception:
+        log.exception("No se pudo subir el abono a Calenzia")
+        return 0, None

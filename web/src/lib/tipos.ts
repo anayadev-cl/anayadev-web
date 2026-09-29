@@ -137,6 +137,9 @@ export interface PagoSolicitudLanding {
   estado: 'por_pagar' | 'pagado'
   voucher_url?: string | null
   voucher_subido_en?: string | null
+  // Abonos: lo verificado y lo que falta (el landing muestra el saldo).
+  pagado_total?: number
+  saldo?: number
 }
 
 export interface SolicitudLanding {
