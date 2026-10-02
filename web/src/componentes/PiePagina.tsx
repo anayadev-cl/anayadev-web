@@ -13,7 +13,7 @@ export function PiePagina({ contenido }: PiePaginaProps) {
 
   return (
     <footer className="border-t border-blanco/8 bg-abisal/60">
-      <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-4 py-6 sm:flex-row sm:px-6">
+      <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-4 pt-6 sm:flex-row sm:px-6">
         <div className="flex items-center gap-3">
           <Marca tamano="sm" />
           <span className="hidden text-xs text-bruma/70 sm:inline">
@@ -57,6 +57,18 @@ export function PiePagina({ contenido }: PiePaginaProps) {
           </a>
         </div>
       </div>
+
+      <nav className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-x-5 gap-y-2 border-t border-blanco/8 px-4 pb-6 pt-4 text-xs text-bruma/70 sm:px-6">
+        <a href="/privacidad" className="transition-colors hover:text-cian">
+          Política de Privacidad
+        </a>
+        <a href="/terminos" className="transition-colors hover:text-cian">
+          Términos de Servicio
+        </a>
+        <a href="/eliminacion-datos" className="transition-colors hover:text-cian">
+          Eliminación de datos
+        </a>
+      </nav>
     </footer>
   )
 }
