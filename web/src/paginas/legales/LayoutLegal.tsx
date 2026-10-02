@@ -18,13 +18,22 @@ export const ENLACES_LEGALES = [
 export function LayoutLegal({ titulo, descripcion, children }: LayoutLegalProps) {
   useEffect(() => {
     window.scrollTo(0, 0)
-  }, [])
+
+    const tituloPrevio = document.title
+    const meta = document.querySelector('meta[name="description"]')
+    const descripcionPrevia = meta?.getAttribute('content') ?? ''
+
+    document.title = `${titulo} — anayadev`
+    meta?.setAttribute('content', descripcion)
+
+    return () => {
+      document.title = tituloPrevio
+      meta?.setAttribute('content', descripcionPrevia)
+    }
+  }, [titulo, descripcion])
 
   return (
     <div className="relative min-h-screen">
-      <title>{`${titulo} — anayadev`}</title>
-      <meta name="description" content={descripcion} />
-
       <FondoCircuito />
 
       <header className="border-b border-blanco/8">
