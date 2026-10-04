@@ -3,10 +3,11 @@ import { api } from '../../lib/api'
 import type { MetodoPagoAdmin } from '../../lib/tipos'
 import { Aviso, Boton, Campo, Switch, entradaClase } from './ui'
 
-const ETIQUETAS_TIPO: Record<MetodoPagoAdmin['tipo'], string> = {
+const ETIQUETAS_TIPO: Record<string, string> = {
   transferencia: 'Transferencia',
   paypal: 'PayPal',
   otro: 'Otro',
+  flow: 'Flow (pago online)',
 }
 
 export function ListaMetodosPago({
@@ -189,6 +190,7 @@ export function PanelPagos() {
                 <option value="transferencia">Transferencia</option>
                 <option value="paypal">PayPal</option>
                 <option value="otro">Otro</option>
+                <option value="flow">Flow (pago online)</option>
               </select>
             </Campo>
             <Campo etiqueta="Nombre visible">
