@@ -582,7 +582,7 @@ def eliminar_necesidad_checkout(
 # ------------------------------------------------------- métodos de pago
 
 
-TIPOS_METODO_PAGO = ("transferencia", "paypal", "otro")
+TIPOS_METODO_PAGO = ("transferencia", "paypal", "otro", "flow")
 
 
 @router.get("/pagos", response_model=list[MetodoPagoAdmin])

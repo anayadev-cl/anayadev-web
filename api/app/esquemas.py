@@ -219,3 +219,4 @@ class MetodoPagoPublico(BaseModel):
     tipo: str
     nombre: str
     instrucciones_publicas: str
+    orden: int
