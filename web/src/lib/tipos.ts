@@ -172,14 +172,14 @@ export interface SolicitudLanding {
 }
 
 export interface MetodoPagoPublico {
-  tipo: 'transferencia' | 'paypal' | 'otro'
+  tipo: 'transferencia' | 'paypal' | 'otro' | 'flow'
   nombre: string
   instrucciones_publicas: string
 }
 
 export interface MetodoPagoAdmin {
   id: number
-  tipo: 'transferencia' | 'paypal' | 'otro'
+  tipo: 'transferencia' | 'paypal' | 'otro' | 'flow'
   nombre: string
   instrucciones_publicas: string
   datos_privados: string | null
