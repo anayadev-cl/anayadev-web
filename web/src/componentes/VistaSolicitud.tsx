@@ -346,7 +346,7 @@ function TarjetaPago({
   const vencimiento = fechaLegible(pago?.vencimiento_pago)
 
   // CMS: se renderiza POR TIPO, igual que el landing de suspendidos: `flow`
-  // dispara el botón "Pagar con Flow"; transferencia/paypal/otro van al bloque
+  // dispara el botón "Pagar con tarjeta"; transferencia/paypal/otro van al bloque
   // de instrucciones. El CMS ya entrega solo métodos activos.
   const { transferencias, flowActivo, mostrarTransferencias } =
     clasificarMetodosPago(metodosPago)
@@ -470,7 +470,7 @@ function TarjetaPago({
             disabled={iniciandoFlow || subiendo}
             className="w-full rounded-full bg-gradient-to-r from-violeta via-electrica to-cian px-6 py-3 text-sm font-semibold text-blanco transition-all hover:shadow-[0_0_30px_-8px_rgba(0,223,240,0.6)] disabled:opacity-50"
           >
-            {iniciandoFlow ? 'Redirigiendo a Flow…' : 'Pagar con Flow'}
+            {iniciandoFlow ? 'Redirigiendo…' : 'Pagar con tarjeta'}
           </button>
         )}
 
