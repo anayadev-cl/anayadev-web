@@ -24,6 +24,14 @@ from .correo_layout import envolver_html, envolver_texto
 
 log = logging.getLogger("anayadev.correo")
 
+# Dirección de contacto/remitente de los correos transaccionales del sitio.
+# El dominio raíz `anayadev.cl` es el verificado en Resend (Calenzia ya envía
+# desde notificaciones@/invitaciones@/seguridad@anayadev.cl), así que
+# `contacto@anayadev.cl` puede ser el From directo. Va además como Reply-To
+# para que el destinatario responda a una casilla real (antes se usaba el
+# gmail de `ANAYADEV_EMAIL_DESTINO`, que no es una dirección @anayadev.cl).
+EMAIL_CONTACTO = "contacto@anayadev.cl"
+
 
 def _enviar_por_resend(
     asunto: str,
@@ -37,7 +45,7 @@ def _enviar_por_resend(
     if not clave.startswith("re_"):
         return False
     datos: dict = {
-        "from": formataddr((ajustes.email_nombre, "noreply@anayadev.cl")),
+        "from": formataddr((ajustes.email_nombre, EMAIL_CONTACTO)),
         "to": [destino],
         "subject": asunto,
         "html": cuerpo_html,
@@ -83,7 +91,7 @@ def _enviar(
         log.info("[CORREO %s] SMTP sin configurar — mensaje registrado:\n%s", asunto, cuerpo_texto)
         return False
 
-    remitente = ajustes.smtp_usuario or "noreply@anayadev.cl"
+    remitente = EMAIL_CONTACTO
     correo_mime = MIMEMultipart("alternative")
     correo_mime["Subject"] = asunto
     correo_mime["From"] = formataddr((ajustes.email_nombre, remitente))
@@ -127,12 +135,23 @@ def _enviar_con_layout(
 
 
 def _texto_a_html(cuerpo_texto: str) -> str:
-    """Texto plano → párrafos HTML simples (para correos internos)."""
-    parrafos = [
-        parrafo.replace("\n", "<br>").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-        for parrafo in cuerpo_texto.split("\n\n")
-    ]
-    return "".join(f"<p>{parrafo}</p>" for parrafo in parrafos)
+    """Texto plano → párrafos HTML simples (para correos internos).
+
+    Orden IMPORTANTE: primero se escapan `&`, `<`, `>` y RECIÉN DESPUÉS los
+    saltos de línea se vuelven `<br>`. Al revés (como estaba) el `<br>` recién
+    insertado se escapaba a `&lt;br&gt;` y el cliente de correo lo mostraba
+    LITERAL en el cuerpo — el bug del onboarding.
+    """
+
+    def _parrafo(texto: str) -> str:
+        escapado = (
+            texto.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        )
+        return escapado.replace("\n", "<br>")
+
+    return "".join(
+        f"<p>{_parrafo(parrafo)}</p>" for parrafo in cuerpo_texto.split("\n\n")
+    )
 
 
 def enviar_correo_contacto(nombre: str, correo: str, mensaje: str) -> bool:
@@ -180,6 +199,7 @@ def enviar_correo_compra(compra) -> bool:
     return _enviar_con_layout(
         f"[anayadev.cl] Nueva compra: {datos.get('nombre_empresa', '')}",
         cuerpo_texto,
+        reply_to=EMAIL_CONTACTO,
     )
 
 
@@ -206,7 +226,7 @@ def enviar_correo_cliente(compra) -> bool:
         "para confirmar el paquete final, ajustar los límites a tu equipo y "
         "coordinar la activación y el pago. No pagas nada todavía.\n\n"
         "Si tienes dudas, responde este correo o escríbenos a "
-        f"{ajustes.email_destino}.\n\n"
+        f"{EMAIL_CONTACTO}.\n\n"
         "— equipo anayadev\n"
     )
     nombre_empresa = datos.get("nombre_empresa", "")
@@ -214,5 +234,5 @@ def enviar_correo_cliente(compra) -> bool:
         f"Recibimos tu solicitud de Calenzia ({nombre_empresa})",
         cuerpo_texto,
         destino=datos.get("admin_correo", ""),
-        reply_to=ajustes.email_destino,
+        reply_to=EMAIL_CONTACTO,
     )
