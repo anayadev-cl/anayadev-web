@@ -524,6 +524,63 @@ function TarjetaPago({
         <p className="mt-2 text-xs font-semibold text-turquesa">Vence el {vencimiento}</p>
       )}
 
+      {/* pago-ux: las declaraciones de transferencia con su estado y comprobantes. */}
+      {pago && (pago.abonos ?? []).length > 0 && (
+        <div className="mt-4 flex flex-col gap-2">
+          <p className="text-xs font-semibold text-bruma">
+            Tus transferencias declaradas
+          </p>
+          <ul className="flex flex-col gap-2">
+            {(pago.abonos ?? []).map((abono) => (
+              <li
+                key={abono.id}
+                className="flex flex-col gap-1 rounded-2xl border border-blanco/10 bg-abisal/60 p-3 text-xs"
+              >
+                <span className="flex items-center justify-between gap-2">
+                  <span className="text-bruma">
+                    {solicitud.simbolo_moneda ?? '$'}
+                    {(abono.monto ?? 0).toLocaleString('es-CL')}
+                  </span>
+                  <span
+                    className={
+                      abono.estado === 'verificado'
+                        ? 'font-semibold text-turquesa'
+                        : abono.estado === 'rechazado'
+                          ? 'font-semibold text-red-300'
+                          : 'font-semibold text-amber-300'
+                    }
+                  >
+                    {abono.estado === 'verificado'
+                      ? 'verificado'
+                      : abono.estado === 'rechazado'
+                        ? 'rechazado'
+                        : 'en verificación'}
+                  </span>
+                </span>
+                {abono.estado === 'rechazado' && abono.rechazo_motivo && (
+                  <span className="text-red-300">Motivo: {abono.rechazo_motivo}</span>
+                )}
+                {(abono.adjuntos ?? []).length > 0 && (
+                  <span className="flex flex-wrap gap-2">
+                    {(abono.adjuntos ?? []).map((adj, i) => (
+                      <a
+                        key={adj.id ?? i}
+                        href={adj.adjunto_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-cian underline"
+                      >
+                        comprobante {i + 1}
+                      </a>
+                    ))}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div className="mt-4 space-y-4">
         {puedePagarFlow && (
           <button

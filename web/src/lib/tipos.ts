@@ -129,6 +129,23 @@ export interface SugerenciaCalenzia {
   aceptada: boolean | null
 }
 
+/** Un comprobante (adjunto) de una declaración de transferencia. */
+export interface AbonoAdjuntoLanding {
+  id: string
+  nombre?: string | null
+  adjunto_url: string
+}
+
+/** Una declaración de transferencia (abono) con su estado (pago-ux). */
+export interface AbonoSolicitudLanding {
+  id: string
+  monto: number | null
+  estado: 'pendiente' | 'verificado' | 'rechazado'
+  rechazo_motivo?: string | null
+  creado_en?: string | null
+  adjuntos?: AbonoAdjuntoLanding[]
+}
+
 export interface PagoSolicitudLanding {
   cobro_id: string
   total: number
@@ -140,6 +157,8 @@ export interface PagoSolicitudLanding {
   // Abonos: lo verificado y lo que falta (el landing muestra el saldo).
   pagado_total?: number
   saldo?: number
+  // pago-ux: las declaraciones de transferencia con su estado y comprobantes.
+  abonos?: AbonoSolicitudLanding[]
 }
 
 export interface SolicitudLanding {
