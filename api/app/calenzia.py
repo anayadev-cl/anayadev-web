@@ -155,6 +155,37 @@ def subir_voucher_solicitud(
         return 0, None
 
 
+def iniciar_pago_flow_solicitud(
+    url_base: str, token: str, cobro_id: str
+) -> tuple[int, dict | None]:
+    """POST /publico/onboarding/solicitud/{token}/cobros/{cobro_id}/flow.
+
+    Inicia el pago Flow del saldo de la solicitud. Reusa el flujo del
+    contexto 1 (`flow.servicio.iniciar_pago` de Calenzia): devuelve
+    (200, {url, reusada}) para redirigir al checkout de Flow, o
+    (404/409/410/502, dict con `detail`) o (0, None) ante un error de red.
+    Sin body (el token de la solicitud es la credencial).
+    """
+    destino = (
+        f"{url_base.rstrip('/')}/api/v1/publico/onboarding/solicitud/{token}"
+        f"/cobros/{cobro_id}/flow"
+    )
+    peticion = urllib.request.Request(destino, data=b"", method="POST")
+    try:
+        with urllib.request.urlopen(peticion, timeout=20) as respuesta:
+            datos = json.loads(respuesta.read().decode("utf-8"))
+            return respuesta.status, datos if isinstance(datos, dict) else None
+    except urllib.error.HTTPError as exc:
+        try:
+            detalle = json.loads(exc.read().decode("utf-8", errors="replace"))
+            return exc.code, detalle if isinstance(detalle, dict) else None
+        except Exception:
+            return exc.code, None
+    except Exception:
+        log.exception("No se pudo iniciar el pago Flow de la solicitud")
+        return 0, None
+
+
 def subir_abono_solicitud(
     url_base: str,
     token: str,

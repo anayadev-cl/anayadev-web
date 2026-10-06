@@ -165,6 +165,19 @@ export const api = {
     ).json()
   },
 
+  // Inicia el pago Flow del saldo de la solicitud (contexto 1): devuelve la
+  // URL de checkout para redirigir. El pago lo confirma el webhook.
+  iniciarPagoFlowSolicitud: async (
+    token: string,
+    cobroId: string,
+  ): Promise<{ url: string; reusada: boolean }> =>
+    (
+      await pedir(
+        `/api/v1/publico/onboarding/solicitud/${encodeURIComponent(token)}/cobros/${cobroId}/flow`,
+        { method: 'POST' },
+      )
+    ).json(),
+
   login: async (usuario: string, clave: string) => {
     const respuesta = await pedir('/api/v1/admin/login', {
       method: 'POST',

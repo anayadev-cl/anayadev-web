@@ -4,6 +4,7 @@ import { FondoCircuito } from './FondoCircuito'
 import { Marca } from './Marca'
 import { formatearMontoMoneda } from '../lib/paises'
 import { api } from '../lib/api'
+import { clasificarMetodosPago } from '../lib/pagoMetodos'
 import type { MetodoPagoPublico, SolicitudLanding } from '../lib/tipos'
 
 const ESTADOS_PENDIENTES = ['solicitada', 'en_revision']
@@ -325,7 +326,7 @@ function TarjetaPago({
   exigible,
 }: {
   solicitud: SolicitudLanding
-  metodosPago: MetodoPagoPublico[]
+  metodosPago: MetodoPagoPublico[] | null
   token: string
   exigible: boolean
 }) {
@@ -335,6 +336,7 @@ function TarjetaPago({
   const [monto, setMonto] = useState('')
   const [saldo, setSaldo] = useState<number | null>(pago?.saldo ?? null)
   const [error, setError] = useState('')
+  const [iniciandoFlow, setIniciandoFlow] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const glosa = pago?.glosa || solicitud.glosa || ''
@@ -342,6 +344,26 @@ function TarjetaPago({
   const pagadoMinor = pago?.pagado_total ?? 0
   const puedeAdjuntar = pago != null && pago.estado === 'por_pagar' && !subido
   const vencimiento = fechaLegible(pago?.vencimiento_pago)
+
+  // CMS: se renderiza POR TIPO, igual que el landing de suspendidos: `flow`
+  // dispara el botón "Pagar con Flow"; transferencia/paypal/otro van al bloque
+  // de instrucciones. El CMS ya entrega solo métodos activos.
+  const { transferencias, flowActivo, mostrarTransferencias } =
+    clasificarMetodosPago(metodosPago)
+  const puedePagarFlow = puedeAdjuntar && flowActivo
+
+  async function pagarFlow() {
+    if (!pago) return
+    setError('')
+    setIniciandoFlow(true)
+    try {
+      const { url } = await api.iniciarPagoFlowSolicitud(token, pago.cobro_id)
+      window.location.href = url
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No pudimos iniciar el pago con Flow.')
+      setIniciandoFlow(false)
+    }
+  }
 
   async function adjuntar(archivo: File | null) {
     if (!archivo || !pago) return
@@ -441,27 +463,47 @@ function TarjetaPago({
       )}
 
       <div className="mt-4 space-y-4">
-        {metodosPago.length === 0 ? (
-          <p className="text-sm leading-relaxed text-bruma">
-            Los datos de pago se publicarán pronto. Nuestro equipo te
-            contactará para coordinar la transferencia.
-          </p>
-        ) : (
-          metodosPago.map((metodo) => (
-            <div
-              key={`${metodo.tipo}-${metodo.nombre}`}
-              className="rounded-2xl border border-blanco/10 bg-abisal/60 p-4"
-            >
-              <p className="text-sm font-semibold text-blanco">{metodo.nombre}</p>
-              <pre className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-bruma">
-                {metodo.instrucciones_publicas}
-              </pre>
-            </div>
-          ))
+        {puedePagarFlow && (
+          <button
+            type="button"
+            onClick={() => void pagarFlow()}
+            disabled={iniciandoFlow || subiendo}
+            className="w-full rounded-full bg-gradient-to-r from-violeta via-electrica to-cian px-6 py-3 text-sm font-semibold text-blanco transition-all hover:shadow-[0_0_30px_-8px_rgba(0,223,240,0.6)] disabled:opacity-50"
+          >
+            {iniciandoFlow ? 'Redirigiendo a Flow…' : 'Pagar con Flow'}
+          </button>
         )}
+
+        {puedePagarFlow && mostrarTransferencias && (
+          <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-bruma/40">
+            <span className="h-px flex-1 bg-blanco/10" />
+            o paga por transferencia
+            <span className="h-px flex-1 bg-blanco/10" />
+          </div>
+        )}
+
+        {mostrarTransferencias &&
+          (transferencias.length === 0 ? (
+            <p className="text-sm leading-relaxed text-bruma">
+              Los datos de pago se publicarán pronto. Nuestro equipo te
+              contactará para coordinar la transferencia.
+            </p>
+          ) : (
+            transferencias.map((metodo) => (
+              <div
+                key={`${metodo.tipo}-${metodo.nombre}`}
+                className="rounded-2xl border border-blanco/10 bg-abisal/60 p-4"
+              >
+                <p className="text-sm font-semibold text-blanco">{metodo.nombre}</p>
+                <pre className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-bruma">
+                  {metodo.instrucciones_publicas}
+                </pre>
+              </div>
+            ))
+          ))}
       </div>
 
-      {puedeAdjuntar && (
+      {puedeAdjuntar && mostrarTransferencias && (
         <div className="mt-5">
           <label className="mb-1 block text-xs font-semibold text-bruma">
             Monto de ESTA transferencia (puedes pagar en partes)
@@ -592,7 +634,7 @@ function VistaEnPrueba({
   token,
 }: {
   solicitud: SolicitudLanding
-  metodosPago: MetodoPagoPublico[]
+  metodosPago: MetodoPagoPublico[] | null
   token: string
 }) {
   const pago = solicitud.pago
@@ -754,7 +796,7 @@ export function VistaSolicitud({
 }: {
   token: string
   solicitud: SolicitudLanding
-  metodosPago?: MetodoPagoPublico[]
+  metodosPago?: MetodoPagoPublico[] | null
 }) {
   const pendiente = ESTADOS_PENDIENTES.includes(solicitud.estado)
   const cerrada = solicitud.estado === 'rechazada' || solicitud.estado === 'expirada'

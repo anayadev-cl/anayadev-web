@@ -467,6 +467,40 @@ def subir_abono_solicitud(
     )
 
 
+@router.post("/onboarding/solicitud/{token}/cobros/{cobro_id}/flow")
+def iniciar_pago_flow_solicitud(
+    token: str,
+    cobro_id: str,
+    sesion: Session = Depends(get_sesion),
+):
+    """Inicia el pago Flow desde el landing `/mi-solicitud`, proxy a Calenzia.
+
+    Reusa el flujo de pago del contexto 1 (el mismo del landing de
+    suspendidos): devuelve la URL de checkout de Flow para redirigir al
+    pagador. No guarda nada local; la orden y su confirmación viven en
+    Calenzia.
+    """
+    token_limpio = token.strip()
+    if not token_limpio or len(token_limpio) > 100:
+        raise HTTPException(404, "No encontramos ninguna solicitud con ese enlace.")
+    url = _url_calenzia(sesion)
+    if not url:
+        raise HTTPException(502, "No pudimos iniciar tu pago. Intenta más tarde.")
+
+    codigo, datos = integracion_calenzia.iniciar_pago_flow_solicitud(
+        url, token_limpio, cobro_id
+    )
+    if codigo == 200 and isinstance(datos, dict):
+        return datos
+
+    detalle = (datos or {}).get("detail") if isinstance(datos, dict) else None
+    codigo_salida = codigo if codigo in (404, 409, 410, 422, 502) else 502
+    raise HTTPException(
+        codigo_salida,
+        detalle if isinstance(detalle, str) else "No pudimos iniciar tu pago.",
+    )
+
+
 _PATRON_SLUG = re.compile(r"^[a-z][a-z0-9]*(-[a-z0-9]+)*$")
 
 _EDICIONES_VALIDAS = ("comunicacion", "con_ia")
