@@ -107,7 +107,7 @@ def envolver_html(cuerpo_html: str, *, titulo: str) -> str:
                     </tr>
                     <tr>
                         <td align="center" style="border-top: 1px solid {_COLOR_DIVISOR}; background-color: {_COLOR_FONDO_FOOTER}; padding: 22px 32px 24px 32px;">
-                            <p style="margin: 0; font-size: 13px; line-height: 1.5; color: {_COLOR_TEXTO_SECUNDARIO};"><strong style="color: #0B1A2B; font-weight: 700;">anayadev</strong><span style="color: {_COLOR_ACENTO};"> &mdash; </span>Inteligencia que conecta</p>
+                            <p style="margin: 0; font-size: 13px; line-height: 1.5; color: {_COLOR_TEXTO_SECUNDARIO};"><a href="https://anayadev.cl" target="_blank" style="color: #0B1A2B; font-weight: 700; text-decoration: none;">anayadev</a><span style="color: {_COLOR_ACENTO};"> &mdash; </span>Inteligencia que conecta</p>
                             <p style="margin: 6px 0 0 0; font-size: 12px; line-height: 1.5; color: {_COLOR_TEXTO_ATENUADO};">Calenzia, el agendamiento inteligente para tu negocio</p>
                         </td>
                     </tr>
