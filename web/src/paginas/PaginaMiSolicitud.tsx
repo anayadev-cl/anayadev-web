@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { useParams, useSearchParams } from 'react-router-dom'
 import { FondoCircuito } from '../componentes/FondoCircuito'
 import { Marca } from '../componentes/Marca'
 import { VistaSolicitud } from '../componentes/VistaSolicitud'
@@ -49,14 +49,29 @@ function Pantalla({
 
 export function PaginaMiSolicitud() {
   const { token = '' } = useParams()
+  const [searchParams] = useSearchParams()
+  // Flow devuelve el pago a esta misma URL con `?token=<flowToken>` (el token
+  // de la solicitud sigue siendo el param de ruta). No damos el pago por
+  // hecho: sondeamos el estado mientras siga pendiente.
+  const tokenFlow = searchParams.get('token')
   const [solicitud, setSolicitud] = useState<SolicitudLanding | null>(null)
-  const [metodosPago, setMetodosPago] = useState<MetodoPagoPublico[]>([])
+  // null = no se pudieron cargar los métodos (degradamos al manual); [] = no
+  // hay métodos activos; [...] = métodos del CMS (ya filtrados por `activo`).
+  const [metodosPago, setMetodosPago] = useState<MetodoPagoPublico[] | null>(null)
   const [fallo, setFallo] = useState<'no_encontrada' | 'error' | null>(null)
+  const vivo = useRef(true)
+
+  useEffect(() => {
+    vivo.current = true
+    return () => {
+      vivo.current = false
+    }
+  }, [])
 
   useEffect(() => {
     let activo = true
     setSolicitud(null)
-    setMetodosPago([])
+    setMetodosPago(null)
     setFallo(null)
     api
       .verSolicitud(token)
@@ -78,6 +93,23 @@ export function PaginaMiSolicitud() {
       activo = false
     }
   }, [token])
+
+  // Retorno de Flow: sondea hasta que el cobro deje de estar `por_pagar`.
+  const pagoPendiente = solicitud?.pago?.estado === 'por_pagar'
+  useEffect(() => {
+    if (!tokenFlow || !pagoPendiente) return
+    const id = setInterval(() => {
+      api
+        .verSolicitud(token)
+        .then((datos) => {
+          if (vivo.current) setSolicitud(datos)
+        })
+        .catch(() => {
+          /* reintenta en el próximo tick */
+        })
+    }, 5000)
+    return () => clearInterval(id)
+  }, [tokenFlow, token, pagoPendiente])
 
   if (fallo === 'no_encontrada') {
     return (
