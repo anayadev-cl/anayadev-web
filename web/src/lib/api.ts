@@ -143,7 +143,7 @@ export const api = {
     token: string,
     cobroId: string,
     monto: number,
-    archivo: File,
+    archivos: File[],
   ): Promise<{
     abono_id: string
     cobro_id: string
@@ -156,7 +156,7 @@ export const api = {
   }> => {
     const formulario = new FormData()
     formulario.append('monto', String(monto))
-    formulario.append('archivo', archivo)
+    for (const archivo of archivos) formulario.append('archivos', archivo)
     return (
       await pedir(
         `/api/v1/publico/onboarding/solicitud/${encodeURIComponent(token)}/cobros/${cobroId}/abonos`,
