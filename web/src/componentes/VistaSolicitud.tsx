@@ -6,8 +6,61 @@ import { formatearMontoMoneda } from '../lib/paises'
 import { api } from '../lib/api'
 import { clasificarMetodosPago } from '../lib/pagoMetodos'
 import type { MetodoPagoPublico, SolicitudLanding } from '../lib/tipos'
+// Iconos propios (SVG inline) — anayadev-web no usa lucide-react.
+function Icono({ d, className = 'size-4' }: { d: string; className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d={d} />
+    </svg>
+  )
+}
+const CreditCard = ({ className }: { className?: string }) => (
+  <Icono className={className} d="M2 5h20v14H2zM2 10h20" />
+)
+const Banknote = ({ className }: { className?: string }) => (
+  <Icono className={className} d="M2 6h20v12H2zM12 14a2 2 0 100-4 2 2 0 000 4M6 12h.01M18 12h.01" />
+)
+const ChevronDown = ({ className }: { className?: string }) => (
+  <Icono className={className} d="m6 9 6 6 6-6" />
+)
+const Upload = ({ className }: { className?: string }) => (
+  <Icono className={className} d="M12 16V4M6 10l6-6 6 6M4 20h16" />
+)
+const Paperclip = ({ className }: { className?: string }) => (
+  <Icono className={className} d="M21 11l-9 9a5 5 0 01-7-7l9-9a3 3 0 014 4l-9 9a1 1 0 01-2-2l8-8" />
+)
+const Trash2 = ({ className }: { className?: string }) => (
+  <Icono className={className} d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v5M14 11v5" />
+)
 
 const ESTADOS_PENDIENTES = ['solicitada', 'en_revision']
+
+/** Chips CRÉ/DÉB de diseño PROPIO (no marcas de terceros). */
+function TarjetaChip({ tipo }: { tipo: 'credito' | 'debito' }) {
+  return (
+    <span
+      title={tipo === 'credito' ? 'Crédito' : 'Débito'}
+      className="inline-flex h-4 w-6 flex-col justify-between rounded-[3px] border border-blanco/50 bg-blanco/15 p-[2px]"
+    >
+      <span className="h-[2px] w-3 rounded-full bg-blanco/70" />
+      <span className="flex items-end justify-between">
+        <span className="text-[6px] font-bold leading-none text-blanco/80">
+          {tipo === 'credito' ? 'CRÉ' : 'DÉB'}
+        </span>
+        <span className="size-[5px] rounded-full bg-blanco/70" />
+      </span>
+    </span>
+  )
+}
 
 function nombreEdicion(edicion: string): string {
   if (edicion === 'con_ia') return 'Con IA'
@@ -337,6 +390,8 @@ function TarjetaPago({
   const [saldo, setSaldo] = useState<number | null>(pago?.saldo ?? null)
   const [error, setError] = useState('')
   const [iniciandoFlow, setIniciandoFlow] = useState(false)
+  const [acordeon, setAcordeon] = useState(false)
+  const [archivos, setArchivos] = useState<File[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
 
   const glosa = pago?.glosa || solicitud.glosa || ''
@@ -365,22 +420,41 @@ function TarjetaPago({
     }
   }
 
-  async function adjuntar(archivo: File | null) {
-    if (!archivo || !pago) return
+  function agregarArchivos(lista: FileList | null) {
+    if (!lista) return
+    setArchivos((prev) => [...prev, ...Array.from(lista)])
+  }
+
+  function quitarArchivo(i: number) {
+    setArchivos((prev) => prev.filter((_, j) => j !== i))
+  }
+
+  async function declarar() {
+    if (!pago) return
     const montoEntero = Number(monto)
     if (!Number.isFinite(montoEntero) || montoEntero <= 0) {
-      setError('Indica el monto de ESTA transferencia antes de subir el comprobante.')
+      setError('Indica el monto de ESTA transferencia.')
+      return
+    }
+    if (archivos.length === 0) {
+      setError('Adjunta al menos un comprobante.')
       return
     }
     setError('')
     setSubiendo(true)
     try {
-      const resultado = await api.subirAbonoSolicitud(token, pago.cobro_id, montoEntero, archivo)
+      const resultado = await api.subirAbonoSolicitud(
+        token,
+        pago.cobro_id,
+        montoEntero,
+        archivos,
+      )
       setSaldo(resultado.saldo)
       if (resultado.completado) {
         setSubido(true)
       }
       setMonto('')
+      setArchivos([])
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No pudimos registrar tu abono.')
     } finally {
@@ -450,15 +524,60 @@ function TarjetaPago({
         <p className="mt-2 text-xs font-semibold text-turquesa">Vence el {vencimiento}</p>
       )}
 
-      {glosa && (
-        <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl border border-blanco/10 bg-abisal/60 px-4 py-3">
-          <div className="min-w-0">
-            <p className="text-xs text-bruma/60">Referencia de tu transferencia</p>
-            <p className="mt-0.5 truncate font-mono text-lg font-bold tracking-wide text-cian">
-              {glosa}
-            </p>
-          </div>
-          <BotonCopiar texto={glosa} />
+      {/* pago-ux: las declaraciones de transferencia con su estado y comprobantes. */}
+      {pago && (pago.abonos ?? []).length > 0 && (
+        <div className="mt-4 flex flex-col gap-2">
+          <p className="text-xs font-semibold text-bruma">
+            Tus transferencias declaradas
+          </p>
+          <ul className="flex flex-col gap-2">
+            {(pago.abonos ?? []).map((abono) => (
+              <li
+                key={abono.id}
+                className="flex flex-col gap-1 rounded-2xl border border-blanco/10 bg-abisal/60 p-3 text-xs"
+              >
+                <span className="flex items-center justify-between gap-2">
+                  <span className="text-bruma">
+                    {solicitud.simbolo_moneda ?? '$'}
+                    {(abono.monto ?? 0).toLocaleString('es-CL')}
+                  </span>
+                  <span
+                    className={
+                      abono.estado === 'verificado'
+                        ? 'font-semibold text-turquesa'
+                        : abono.estado === 'rechazado'
+                          ? 'font-semibold text-red-300'
+                          : 'font-semibold text-amber-300'
+                    }
+                  >
+                    {abono.estado === 'verificado'
+                      ? 'verificado'
+                      : abono.estado === 'rechazado'
+                        ? 'rechazado'
+                        : 'en verificación'}
+                  </span>
+                </span>
+                {abono.estado === 'rechazado' && abono.rechazo_motivo && (
+                  <span className="text-red-300">Motivo: {abono.rechazo_motivo}</span>
+                )}
+                {(abono.adjuntos ?? []).length > 0 && (
+                  <span className="flex flex-wrap gap-2">
+                    {(abono.adjuntos ?? []).map((adj, i) => (
+                      <a
+                        key={adj.id ?? i}
+                        href={adj.adjunto_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-cian underline"
+                      >
+                        comprobante {i + 1}
+                      </a>
+                    ))}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
@@ -468,96 +587,156 @@ function TarjetaPago({
             type="button"
             onClick={() => void pagarFlow()}
             disabled={iniciandoFlow || subiendo}
-            className="w-full rounded-full bg-gradient-to-r from-violeta via-electrica to-cian px-6 py-3 text-sm font-semibold text-blanco transition-all hover:shadow-[0_0_30px_-8px_rgba(0,223,240,0.6)] disabled:opacity-50"
+            className="group flex w-full items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-violeta via-electrica to-cian px-6 py-3.5 text-sm font-semibold text-blanco shadow-lg shadow-cian/20 transition-all hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-50"
           >
-            {iniciandoFlow ? 'Redirigiendo…' : 'Pagar con tarjeta'}
+            <span className="flex size-8 items-center justify-center rounded-xl bg-white/15">
+              <CreditCard className="size-4" />
+            </span>
+            <span>{iniciandoFlow ? 'Redirigiendo…' : 'Pagar con tarjeta'}</span>
+            <span className="flex items-center gap-1">
+              <TarjetaChip tipo="credito" />
+              <TarjetaChip tipo="debito" />
+            </span>
           </button>
         )}
 
-        {puedePagarFlow && mostrarTransferencias && (
-          <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-bruma/40">
-            <span className="h-px flex-1 bg-blanco/10" />
-            o paga por transferencia
-            <span className="h-px flex-1 bg-blanco/10" />
+        {mostrarTransferencias && puedeAdjuntar && (
+          <div className="overflow-hidden rounded-2xl border border-blanco/10">
+            <button
+              type="button"
+              onClick={() => setAcordeon((v) => !v)}
+              className="flex w-full items-center justify-between gap-2 bg-abisal/60 px-4 py-3 text-left transition-colors hover:bg-abisal"
+            >
+              <span className="flex items-center gap-2 text-sm font-semibold text-blanco">
+                <Banknote className="size-4 text-cian" /> Pagar por transferencia
+              </span>
+              <ChevronDown
+                className={`size-4 text-bruma transition-transform ${
+                  acordeon ? 'rotate-180' : ''
+                }`}
+              />
+            </button>
+            {acordeon && (
+              <div className="flex flex-col gap-3 border-t border-blanco/10 p-4">
+                {transferencias.length === 0 ? (
+                  <p className="text-sm leading-relaxed text-bruma">
+                    Los datos de pago se publicarán pronto. Nuestro equipo te
+                    contactará para coordinar la transferencia.
+                  </p>
+                ) : (
+                  <ul className="flex flex-col gap-2">
+                    {transferencias.map((metodo) => (
+                      <li
+                        key={`${metodo.tipo}-${metodo.nombre}`}
+                        className="rounded-2xl border border-blanco/10 bg-abisal/60 p-4"
+                      >
+                        <p className="text-sm font-semibold text-blanco">
+                          {metodo.nombre}
+                        </p>
+                        <pre className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-bruma">
+                          {metodo.instrucciones_publicas}
+                        </pre>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {glosa && (
+                  <div className="flex items-center justify-between gap-3 rounded-2xl border border-blanco/10 bg-abisal/60 px-4 py-3">
+                    <div className="min-w-0">
+                      <p className="text-xs text-bruma/60">
+                        Referencia de tu transferencia
+                      </p>
+                      <p className="mt-0.5 truncate font-mono text-base font-bold tracking-wide text-cian">
+                        {glosa}
+                      </p>
+                    </div>
+                    <BotonCopiar texto={glosa} />
+                  </div>
+                )}
+
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-bruma">
+                    Monto de ESTA transferencia (puedes pagar en partes)
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={monto}
+                    onChange={(e) => setMonto(e.target.value)}
+                    placeholder={
+                      solicitud.moneda
+                        ? formatearMontoMoneda(
+                            {
+                              moneda: solicitud.moneda,
+                              simbolo_moneda: solicitud.simbolo_moneda,
+                              decimales: solicitud.decimales,
+                            },
+                            saldo ?? totalMinor ?? 0,
+                          )
+                        : 'Monto'
+                    }
+                    className="w-full rounded-2xl border border-blanco/10 bg-abisal/60 px-4 py-3 text-sm text-blanco placeholder:text-bruma/40 focus:outline-none focus:ring-1 focus:ring-cian/50"
+                  />
+                </div>
+
+                <div>
+                  <input
+                    ref={inputRef}
+                    type="file"
+                    multiple
+                    accept=".png,.jpg,.jpeg,.webp,.pdf"
+                    className="hidden"
+                    onChange={(e) => {
+                      agregarArchivos(e.target.files)
+                      e.target.value = ''
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => inputRef.current?.click()}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-blanco/15 px-4 py-2 text-xs font-semibold text-bruma transition-colors hover:border-cian/50 hover:text-cian"
+                  >
+                    <Upload className="size-3.5" /> Agregar comprobante
+                  </button>
+                  {archivos.length > 0 && (
+                    <ul className="mt-2 flex flex-col gap-1.5">
+                      {archivos.map((f, i) => (
+                        <li
+                          key={`${f.name}-${i}`}
+                          className="flex items-center justify-between gap-2 rounded-lg bg-abisal/60 px-3 py-1.5 text-xs text-bruma"
+                        >
+                          <span className="flex min-w-0 items-center gap-1.5">
+                            <Paperclip className="size-3 shrink-0" />
+                            <span className="truncate">{f.name}</span>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => quitarArchivo(i)}
+                            className="shrink-0 text-bruma/60 hover:text-red-300"
+                            title="Quitar"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => void declarar()}
+                  disabled={subiendo || !monto || archivos.length === 0}
+                  className="rounded-full bg-gradient-to-r from-violeta via-electrica to-cian px-6 py-3 text-sm font-semibold text-blanco transition-all hover:shadow-[0_0_30px_-8px_rgba(0,223,240,0.6)] disabled:opacity-50"
+                >
+                  {subiendo ? 'Enviando…' : 'Declarar transferencia'}
+                </button>
+              </div>
+            )}
           </div>
         )}
-
-        {mostrarTransferencias &&
-          (transferencias.length === 0 ? (
-            <p className="text-sm leading-relaxed text-bruma">
-              Los datos de pago se publicarán pronto. Nuestro equipo te
-              contactará para coordinar la transferencia.
-            </p>
-          ) : (
-            transferencias.map((metodo) => (
-              <div
-                key={`${metodo.tipo}-${metodo.nombre}`}
-                className="rounded-2xl border border-blanco/10 bg-abisal/60 p-4"
-              >
-                <p className="text-sm font-semibold text-blanco">{metodo.nombre}</p>
-                <pre className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-bruma">
-                  {metodo.instrucciones_publicas}
-                </pre>
-              </div>
-            ))
-          ))}
       </div>
-
-      {puedeAdjuntar && mostrarTransferencias && (
-        <div className="mt-5">
-          <label className="mb-1 block text-xs font-semibold text-bruma">
-            Monto de ESTA transferencia (puedes pagar en partes)
-          </label>
-          <input
-            type="number"
-            min={1}
-            value={monto}
-            onChange={(e) => setMonto(e.target.value)}
-            placeholder={
-              solicitud.moneda
-                ? formatearMontoMoneda(
-                    {
-                      moneda: solicitud.moneda,
-                      simbolo_moneda: solicitud.simbolo_moneda,
-                      decimales: solicitud.decimales,
-                    },
-                    saldo ?? totalMinor ?? 0,
-                  )
-                : 'Monto'
-            }
-            className="mb-3 w-full rounded-2xl border border-blanco/10 bg-abisal/60 px-4 py-3 text-sm text-blanco placeholder:text-bruma/40 focus:outline-none focus:ring-1 focus:ring-cian/50"
-          />
-          <input
-            ref={inputRef}
-            type="file"
-            accept=".png,.jpg,.jpeg,.webp,.pdf"
-            className="hidden"
-            onChange={(e) => void adjuntar(e.target.files?.[0] ?? null)}
-          />
-          <button
-            type="button"
-            disabled={subiendo}
-            onClick={() => inputRef.current?.click()}
-            className={`rounded-full px-6 py-3 text-sm font-semibold transition-all disabled:opacity-50 ${
-              exigible
-                ? 'bg-gradient-to-r from-violeta via-electrica to-cian text-blanco hover:shadow-[0_0_30px_-8px_rgba(0,223,240,0.6)]'
-                : 'border border-cian/40 text-cian hover:bg-cian/10'
-            }`}
-          >
-            {subiendo ? 'Subiendo…' : 'Declarar abono (monto + comprobante)'}
-          </button>
-          {pago?.voucher_url && !subido && (
-            <a
-              href={pago.voucher_url}
-              target="_blank"
-              rel="noreferrer"
-              className="ml-3 text-xs font-semibold text-cian underline hover:text-turquesa"
-            >
-              Ver comprobante anterior
-            </a>
-          )}
-        </div>
-      )}
       {subido && (
         <p className="mt-4 rounded-xl border border-turquesa/30 bg-turquesa/10 px-4 py-3 text-sm text-turquesa">
           ¡Cobro completo! Recibimos tus abonos y los estamos verificando.
