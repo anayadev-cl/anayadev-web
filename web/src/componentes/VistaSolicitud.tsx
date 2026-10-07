@@ -44,24 +44,6 @@ const Trash2 = ({ className }: { className?: string }) => (
 
 const ESTADOS_PENDIENTES = ['solicitada', 'en_revision']
 
-/** Chips CRÉ/DÉB de diseño PROPIO (no marcas de terceros). */
-function TarjetaChip({ tipo }: { tipo: 'credito' | 'debito' }) {
-  return (
-    <span
-      title={tipo === 'credito' ? 'Crédito' : 'Débito'}
-      className="inline-flex h-4 w-6 flex-col justify-between rounded-[3px] border border-blanco/50 bg-blanco/15 p-[2px]"
-    >
-      <span className="h-[2px] w-3 rounded-full bg-blanco/70" />
-      <span className="flex items-end justify-between">
-        <span className="text-[6px] font-bold leading-none text-blanco/80">
-          {tipo === 'credito' ? 'CRÉ' : 'DÉB'}
-        </span>
-        <span className="size-[5px] rounded-full bg-blanco/70" />
-      </span>
-    </span>
-  )
-}
-
 function nombreEdicion(edicion: string): string {
   if (edicion === 'con_ia') return 'Con IA'
   if (edicion === 'comunicacion') return 'Comunicación'
@@ -593,9 +575,8 @@ function TarjetaPago({
               <CreditCard className="size-4" />
             </span>
             <span>{iniciandoFlow ? 'Redirigiendo…' : 'Pagar con tarjeta'}</span>
-            <span className="flex items-center gap-1">
-              <TarjetaChip tipo="credito" />
-              <TarjetaChip tipo="debito" />
+            <span className="flex items-center rounded-lg bg-blanco px-2 py-1">
+              <img src="/flow-logo-transparent.png" alt="Flow" className="h-3.5 w-auto" />
             </span>
           </button>
         )}
@@ -938,21 +919,19 @@ function VistaCerrada({ solicitud }: { solicitud: SolicitudLanding }) {
         <p className="mt-3 text-sm leading-relaxed text-bruma">
           {expirada
             ? 'La solicitud expiró sin completarse. Puedes volver a solicitarla cuando quieras: todo el proceso toma un par de minutos.'
-            : 'Lamentablemente no pudimos continuar con tu solicitud. Si crees que fue un error o tienes dudas, escríbenos y lo revisamos contigo.'}
+            : 'No pudimos continuar con tu solicitud esta vez. Puedes volver a postular cuando quieras corrigiendo lo indicado — te dejamos el detalle en el correo que te enviamos.'}
         </p>
       </div>
       <section className="tarjeta-vidrio rounded-3xl p-5 sm:p-6">
         <LineaTiempo hitos={lineaDeTiempo(solicitud)} />
       </section>
       <div className="flex flex-col justify-center gap-3 sm:flex-row">
-        {expirada && (
-          <a
-            href="/comprar"
-            className="rounded-full bg-gradient-to-r from-violeta via-electrica to-cian px-7 py-3 text-sm font-semibold text-blanco"
-          >
-            Volver a intentarlo
-          </a>
-        )}
+        <a
+          href="/comprar"
+          className="rounded-full bg-gradient-to-r from-violeta via-electrica to-cian px-7 py-3 text-sm font-semibold text-blanco"
+        >
+          {expirada ? 'Volver a intentarlo' : 'Volver a postular'}
+        </a>
         <a
           href="/#contacto"
           className="rounded-full border border-blanco/15 px-7 py-3 text-sm font-semibold text-bruma transition-colors hover:border-cian/50 hover:text-cian"
