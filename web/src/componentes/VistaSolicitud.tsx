@@ -938,21 +938,19 @@ function VistaCerrada({ solicitud }: { solicitud: SolicitudLanding }) {
         <p className="mt-3 text-sm leading-relaxed text-bruma">
           {expirada
             ? 'La solicitud expiró sin completarse. Puedes volver a solicitarla cuando quieras: todo el proceso toma un par de minutos.'
-            : 'Lamentablemente no pudimos continuar con tu solicitud. Si crees que fue un error o tienes dudas, escríbenos y lo revisamos contigo.'}
+            : 'No pudimos continuar con tu solicitud esta vez. Puedes volver a postular cuando quieras corrigiendo lo indicado — te dejamos el detalle en el correo que te enviamos.'}
         </p>
       </div>
       <section className="tarjeta-vidrio rounded-3xl p-5 sm:p-6">
         <LineaTiempo hitos={lineaDeTiempo(solicitud)} />
       </section>
       <div className="flex flex-col justify-center gap-3 sm:flex-row">
-        {expirada && (
-          <a
-            href="/comprar"
-            className="rounded-full bg-gradient-to-r from-violeta via-electrica to-cian px-7 py-3 text-sm font-semibold text-blanco"
-          >
-            Volver a intentarlo
-          </a>
-        )}
+        <a
+          href="/comprar"
+          className="rounded-full bg-gradient-to-r from-violeta via-electrica to-cian px-7 py-3 text-sm font-semibold text-blanco"
+        >
+          {expirada ? 'Volver a intentarlo' : 'Volver a postular'}
+        </a>
         <a
           href="/#contacto"
           className="rounded-full border border-blanco/15 px-7 py-3 text-sm font-semibold text-bruma transition-colors hover:border-cian/50 hover:text-cian"
