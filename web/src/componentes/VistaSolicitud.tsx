@@ -26,6 +26,12 @@ function Icono({ d, className = 'size-4' }: { d: string; className?: string }) {
 const CreditCard = ({ className }: { className?: string }) => (
   <Icono className={className} d="M2 5h20v14H2zM2 10h20" />
 )
+const ArrowRight = ({ className }: { className?: string }) => (
+  <Icono className={className} d="M5 12h14M13 6l6 6-6 6" />
+)
+const Lock = ({ className }: { className?: string }) => (
+  <Icono className={className} d="M5 11h14v10H5zM8 11V7a4 4 0 018 0v4" />
+)
 const Banknote = ({ className }: { className?: string }) => (
   <Icono className={className} d="M2 6h20v12H2zM12 14a2 2 0 100-4 2 2 0 000 4M6 12h.01M18 12h.01" />
 )
@@ -389,6 +395,28 @@ function TarjetaPago({
     clasificarMetodosPago(metodosPago)
   const puedePagarFlow = puedeAdjuntar && flowActivo
 
+  // boton-flow-v2: bloque de monto encima del CTA. En el panel de prueba
+  // (opcional, sin pago aún) se muestra «Tu plan / Mensualidad» con «/ mes»;
+  // con pago parcial real o cuenta exigible se conserva «Saldo pendiente».
+  const esPlanMensual = !exigible && pagadoMinor === 0 && pago?.estado !== 'pagado'
+  const etiquetaMonto =
+    pago?.estado === 'pagado'
+      ? 'Total a pagar'
+      : esPlanMensual
+        ? 'Tu plan'
+        : 'Saldo pendiente'
+  const montoPago =
+    totalMinor != null && solicitud.moneda
+      ? formatearMontoMoneda(
+          {
+            moneda: solicitud.moneda,
+            simbolo_moneda: solicitud.simbolo_moneda,
+            decimales: solicitud.decimales,
+          },
+          saldo ?? totalMinor,
+        )
+      : ''
+
   async function pagarFlow() {
     if (!pago) return
     setError('')
@@ -463,18 +491,17 @@ function TarjetaPago({
       </p>
 
       {totalMinor != null && solicitud.moneda && (
-        <div className="mt-4 flex items-center justify-between rounded-2xl border border-blanco/10 bg-abisal/60 px-5 py-4">
-          <span className="text-sm font-semibold text-bruma">
-            {pago?.estado === 'pagado' ? 'Total a pagar' : 'Saldo pendiente'}
+        <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl border border-blanco/10 bg-abisal/60 px-5 py-4">
+          <span className="flex flex-col">
+            <span className="text-sm font-semibold text-bruma">{etiquetaMonto}</span>
+            {esPlanMensual && (
+              <span className="text-xs text-bruma/60">Mensualidad</span>
+            )}
           </span>
-          <span className="text-2xl font-bold texto-gradiente">
-            {formatearMontoMoneda(
-              {
-                moneda: solicitud.moneda,
-                simbolo_moneda: solicitud.simbolo_moneda,
-                decimales: solicitud.decimales,
-              },
-              saldo ?? totalMinor,
+          <span className="flex items-baseline gap-1">
+            <span className="texto-gradiente text-2xl font-bold">{montoPago}</span>
+            {esPlanMensual && (
+              <span className="text-sm font-medium text-bruma/70">/ mes</span>
             )}
           </span>
         </div>
@@ -565,20 +592,25 @@ function TarjetaPago({
 
       <div className="mt-4 space-y-4">
         {puedePagarFlow && (
-          <button
-            type="button"
-            onClick={() => void pagarFlow()}
-            disabled={iniciandoFlow || subiendo}
-            className="group flex w-full items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-violeta via-electrica to-cian px-6 py-3.5 text-sm font-semibold text-blanco shadow-lg shadow-cian/20 transition-all hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-50"
-          >
-            <span className="flex size-8 items-center justify-center rounded-xl bg-white/15">
-              <CreditCard className="size-4" />
-            </span>
-            <span>{iniciandoFlow ? 'Redirigiendo…' : 'Pagar con tarjeta'}</span>
-            <span className="flex items-center rounded-lg bg-blanco px-2 py-1">
-              <img src="/flow-logo-transparent.png" alt="Flow" className="h-3.5 w-auto" />
-            </span>
-          </button>
+          <div className="flex flex-col gap-3">
+            <button
+              type="button"
+              onClick={() => void pagarFlow()}
+              disabled={iniciandoFlow || subiendo}
+              className="group flex h-14 w-full items-center gap-3 rounded-2xl bg-gradient-to-r from-violeta via-electrica to-cian px-6 text-sm font-semibold text-blanco shadow-lg shadow-cian/20 transition-all hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-50"
+            >
+              <CreditCard className="size-5 shrink-0" />
+              <span className="flex-1 text-center">
+                {iniciandoFlow ? 'Redirigiendo…' : `Pagar ${montoPago} con tarjeta`}
+              </span>
+              <ArrowRight className="size-5 shrink-0 transition-transform group-hover:translate-x-0.5" />
+            </button>
+            <div className="flex items-center justify-center gap-1.5 text-xs text-bruma/70">
+              <Lock className="size-3.5 shrink-0" />
+              <span>Pago seguro procesado por</span>
+              <img src="/flow-logo-light.png" alt="Flow" className="h-4 w-auto" />
+            </div>
+          </div>
         )}
 
         {mostrarTransferencias && puedeAdjuntar && (
