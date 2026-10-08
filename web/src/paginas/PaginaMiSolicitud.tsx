@@ -131,5 +131,12 @@ export function PaginaMiSolicitud() {
   if (!solicitud) {
     return <Pantalla titulo="Cargando tu solicitud…" detalle="" />
   }
-  return <VistaSolicitud token={token} solicitud={solicitud} metodosPago={metodosPago} />
+  return (
+    <VistaSolicitud
+      token={token}
+      solicitud={solicitud}
+      metodosPago={metodosPago}
+      onActualizar={setSolicitud}
+    />
+  )
 }

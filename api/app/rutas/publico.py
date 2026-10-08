@@ -501,6 +501,56 @@ def iniciar_pago_flow_solicitud(
     )
 
 
+@router.post("/onboarding/solicitud/{token}/aceptar")
+def aceptar_plan_solicitud(token: str, sesion: Session = Depends(get_sesion)):
+    """El cliente acepta el plan propuesto (proxy a Calenzia, onboarding-aceptacion).
+
+    Sin login: la credencial es el token de la solicitud. No guarda nada local.
+    """
+    token_limpio = token.strip()
+    if not token_limpio or len(token_limpio) > 100:
+        raise HTTPException(404, "No encontramos ninguna solicitud con ese enlace.")
+    url = _url_calenzia(sesion)
+    if not url:
+        raise HTTPException(502, "No pudimos aceptar tu plan. Intenta más tarde.")
+
+    codigo, datos = integracion_calenzia.aceptar_plan_solicitud(url, token_limpio)
+    if codigo == 200 and isinstance(datos, dict):
+        return datos
+
+    detalle = (datos or {}).get("detail") if isinstance(datos, dict) else None
+    codigo_salida = codigo if codigo in (404, 409, 410, 422, 502) else 502
+    raise HTTPException(
+        codigo_salida,
+        detalle if isinstance(detalle, str) else "No pudimos aceptar tu plan.",
+    )
+
+
+@router.post("/onboarding/solicitud/{token}/pedir-cambios")
+def pedir_cambios_plan_solicitud(token: str, sesion: Session = Depends(get_sesion)):
+    """El cliente pide conversar antes de aceptar (proxy a Calenzia).
+
+    Sin login: la credencial es el token de la solicitud. No guarda nada local.
+    """
+    token_limpio = token.strip()
+    if not token_limpio or len(token_limpio) > 100:
+        raise HTTPException(404, "No encontramos ninguna solicitud con ese enlace.")
+    url = _url_calenzia(sesion)
+    if not url:
+        raise HTTPException(502, "No pudimos enviar tu pedido. Intenta más tarde.")
+
+    codigo, datos = integracion_calenzia.pedir_cambios_plan_solicitud(url, token_limpio)
+    if codigo == 200 and isinstance(datos, dict):
+        return datos
+
+    detalle = (datos or {}).get("detail") if isinstance(datos, dict) else None
+    codigo_salida = codigo if codigo in (404, 409, 410, 422, 502) else 502
+    raise HTTPException(
+        codigo_salida,
+        detalle if isinstance(detalle, str) else "No pudimos enviar tu pedido.",
+    )
+
+
 _PATRON_SLUG = re.compile(r"^[a-z][a-z0-9]*(-[a-z0-9]+)*$")
 
 _EDICIONES_VALIDAS = ("comunicacion", "con_ia")
