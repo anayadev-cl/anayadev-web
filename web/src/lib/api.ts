@@ -122,6 +122,23 @@ export const api = {
       await pedir(`/api/v1/publico/onboarding/solicitud/${encodeURIComponent(token)}`)
     ).json(),
 
+  // onboarding-aceptacion: el cliente acepta el plan propuesto o pide hablarlo.
+  aceptarPlan: async (token: string): Promise<SolicitudLanding> =>
+    (
+      await pedir(
+        `/api/v1/publico/onboarding/solicitud/${encodeURIComponent(token)}/aceptar`,
+        { method: 'POST' },
+      )
+    ).json(),
+
+  pedirCambiosPlan: async (token: string): Promise<SolicitudLanding> =>
+    (
+      await pedir(
+        `/api/v1/publico/onboarding/solicitud/${encodeURIComponent(token)}/pedir-cambios`,
+        { method: 'POST' },
+      )
+    ).json(),
+
   subirVoucherSolicitud: async (
     token: string,
     cobroId: string,

@@ -161,6 +161,25 @@ export interface PagoSolicitudLanding {
   abonos?: AbonoSolicitudLanding[]
 }
 
+export interface ModuloPrecioLanding {
+  concepto: string
+  precio_monto: number
+}
+
+/** onboarding-aceptacion: el plan propuesto por el superadmin (contrato + precio). */
+export interface PlanPropuestoLanding {
+  edicion: string
+  modulos: string[]
+  modulos_precio: ModuloPrecioLanding[]
+  nro_trabajadores: number
+  moneda: string
+  simbolo_moneda: string
+  decimales: number
+  precio_trabajador: number
+  total_primera_factura: number
+  propuesto_en: string
+}
+
 export interface SolicitudLanding {
   estado:
     | 'solicitada'
@@ -188,6 +207,17 @@ export interface SolicitudLanding {
   tenant_estado?: string | null
   /** A.3: cobro del ciclo del tenant (estado, total, vencimiento, glosa, voucher). */
   pago?: PagoSolicitudLanding | null
+  /** onboarding-aceptacion: el pedido original del cliente (para el diff). */
+  solicitud_original?: {
+    edicion: string
+    modulos: string[]
+    nro_trabajadores: number
+  } | null
+  /** onboarding-aceptacion: el plan propuesto (contrato final + precio). */
+  plan_propuesto?: PlanPropuestoLanding | null
+  /** onboarding-aceptacion: NULL · 'pendiente' · 'aceptada' · 'conversar'. */
+  aceptacion_estado?: string | null
+  aceptada_en?: string | null
 }
 
 export interface MetodoPagoPublico {

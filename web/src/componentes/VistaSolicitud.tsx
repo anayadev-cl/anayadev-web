@@ -254,6 +254,14 @@ function Fila({ etiqueta, valor }: { etiqueta: string; valor: string }) {
 function TarjetaResumen({ solicitud }: { solicitud: SolicitudLanding }) {
   const nombres = solicitud.modulos_nombre ?? {}
   const fecha = fechaLegible(solicitud.creado_en)
+  // "Lo que pediste" = el pedido ORIGINAL del cliente. `solicitud.modulos`
+  // trae el contrato YA ajustado por el superadmin; el diff vive en
+  // TarjetaPlanPropuesto. Filas viejas sin captura caen al contrato actual.
+  const original = solicitud.solicitud_original ?? {
+    edicion: solicitud.edicion,
+    modulos: solicitud.modulos,
+    nro_trabajadores: solicitud.nro_trabajadores,
+  }
   return (
     <section className="tarjeta-vidrio rounded-3xl p-6 sm:p-8">
       <h2 className="text-lg font-semibold text-blanco">Lo que pediste</h2>
@@ -261,20 +269,20 @@ function TarjetaResumen({ solicitud }: { solicitud: SolicitudLanding }) {
         <Fila etiqueta="Negocio" valor={solicitud.negocio_nombre} />
         <Fila etiqueta="Tu página" valor={`agenda.anayadev.cl/${solicitud.slug}`} />
         <Fila etiqueta="País" valor={solicitud.pais} />
-        <Fila etiqueta="Edición" valor={nombreEdicion(solicitud.edicion)} />
+        <Fila etiqueta="Edición" valor={nombreEdicion(original.edicion)} />
         <Fila
           etiqueta="Trabajadores"
-          valor={`${solicitud.nro_trabajadores} ${
-            solicitud.nro_trabajadores === 1 ? 'persona' : 'personas'
+          valor={`${original.nro_trabajadores} ${
+            original.nro_trabajadores === 1 ? 'persona' : 'personas'
           }`}
         />
         <div className="border-t border-blanco/8 pt-2.5">
           <dt className="text-bruma/70">Módulos</dt>
           <dd className="mt-1.5 flex flex-wrap gap-1.5">
-            {solicitud.modulos.length === 0 ? (
+            {original.modulos.length === 0 ? (
               <span className="text-bruma/60">—</span>
             ) : (
-              solicitud.modulos.map((codigo) => (
+              original.modulos.map((codigo) => (
                 <span
                   key={codigo}
                   className="rounded-md border border-cian/25 bg-cian/5 px-2 py-0.5 text-[11px] font-medium text-cian"
@@ -287,6 +295,185 @@ function TarjetaResumen({ solicitud }: { solicitud: SolicitudLanding }) {
         </div>
       </dl>
       {fecha && <p className="mt-4 text-xs text-bruma/60">Solicitada el {fecha}</p>}
+    </section>
+  )
+}
+
+function BadgeAceptacion({ estado }: { estado: string | null | undefined }) {
+  if (estado === 'aceptada') {
+    return (
+      <span className="shrink-0 rounded-full border border-turquesa/40 bg-turquesa/10 px-3 py-1 text-xs font-semibold text-turquesa">
+        Aceptado ✓
+      </span>
+    )
+  }
+  if (estado === 'conversar') {
+    return (
+      <span className="shrink-0 rounded-full border border-amber-300/40 bg-amber-300/10 px-3 py-1 text-xs font-semibold text-amber-200">
+        Quieres conversarlo
+      </span>
+    )
+  }
+  return (
+    <span className="shrink-0 rounded-full border border-cian/40 bg-cian/10 px-3 py-1 text-xs font-semibold text-cian">
+      Pendiente de aceptación
+    </span>
+  )
+}
+
+function TarjetaPlanPropuesto({
+  solicitud,
+  token,
+  onActualizar,
+}: {
+  solicitud: SolicitudLanding
+  token: string
+  onActualizar?: (s: SolicitudLanding) => void
+}) {
+  const plan = solicitud.plan_propuesto
+  const [enviando, setEnviando] = useState<'aceptar' | 'conversar' | null>(null)
+  const [error, setError] = useState('')
+  if (!plan) return null
+
+  const nombres = solicitud.modulos_nombre ?? {}
+  const original = solicitud.solicitud_original
+  const estado = solicitud.aceptacion_estado
+  const origMods = new Set(original?.modulos ?? [])
+  const propMods = new Set(plan.modulos)
+  const agregados = plan.modulos.filter((m) => !origMods.has(m))
+  const quitados = (original?.modulos ?? []).filter((m) => !propMods.has(m))
+  const edicionCambio = !!original && original.edicion !== plan.edicion
+  const trabCambio = !!original && original.nro_trabajadores !== plan.nro_trabajadores
+
+  const formatear = (monto: number) =>
+    formatearMontoMoneda(
+      { moneda: plan.moneda, simbolo_moneda: plan.simbolo_moneda, decimales: plan.decimales },
+      monto,
+    )
+
+  async function aceptar() {
+    setError('')
+    setEnviando('aceptar')
+    try {
+      const actualizada = await api.aceptarPlan(token)
+      onActualizar?.(actualizada)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No pudimos aceptar tu plan.')
+    } finally {
+      setEnviando(null)
+    }
+  }
+
+  async function conversar() {
+    setError('')
+    setEnviando('conversar')
+    try {
+      const actualizada = await api.pedirCambiosPlan(token)
+      onActualizar?.(actualizada)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No pudimos enviar tu pedido.')
+    } finally {
+      setEnviando(null)
+    }
+  }
+
+  return (
+    <section className="tarjeta-vidrio rounded-3xl p-6 sm:p-8">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-lg font-semibold text-blanco">Tu plan propuesto</h2>
+        <BadgeAceptacion estado={estado} />
+      </div>
+
+      <div className="mt-4 flex items-center justify-between rounded-2xl border border-cian/30 bg-cian/5 px-5 py-4">
+        <span className="text-sm font-semibold text-bruma">Total mensual</span>
+        <span className="texto-gradiente text-2xl font-bold">
+          {formatear(plan.total_primera_factura)}
+        </span>
+      </div>
+
+      <ul className="mt-4 space-y-2 text-sm">
+        {plan.modulos.map((codigo) => {
+          const precio = plan.modulos_precio.find((p) => p.concepto === codigo)
+          const esNuevo = agregados.includes(codigo)
+          return (
+            <li
+              key={codigo}
+              className="flex items-center justify-between gap-3 rounded-lg border border-blanco/10 bg-abisal/50 px-3 py-2"
+            >
+              <span className="flex items-center gap-2 text-blanco">
+                {nombres[codigo] ?? codigo}
+                {esNuevo && (
+                  <span className="rounded-full border border-cian/40 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-cian">
+                    nuevo
+                  </span>
+                )}
+              </span>
+              <span className="text-bruma">{precio ? formatear(precio.precio_monto) : '—'}</span>
+            </li>
+          )
+        })}
+        {quitados.map((codigo) => (
+          <li
+            key={`quitado-${codigo}`}
+            className="flex items-center justify-between gap-3 rounded-lg border border-red-400/20 bg-red-500/5 px-3 py-2"
+          >
+            <span className="text-bruma line-through">{nombres[codigo] ?? codigo}</span>
+            <span className="text-[11px] uppercase tracking-wide text-red-300">quitado</span>
+          </li>
+        ))}
+      </ul>
+
+      {(edicionCambio || trabCambio) && original && (
+        <div className="mt-3 space-y-1 text-xs text-bruma">
+          {edicionCambio && (
+            <p>
+              Edición: <span className="line-through">{nombreEdicion(original.edicion)}</span>{' '}
+              → <span className="font-semibold text-blanco">{nombreEdicion(plan.edicion)}</span>
+            </p>
+          )}
+          {trabCambio && (
+            <p>
+              Trabajadores: <span className="line-through">{original.nro_trabajadores}</span> →{' '}
+              <span className="font-semibold text-blanco">{plan.nro_trabajadores}</span>
+            </p>
+          )}
+        </div>
+      )}
+
+      {estado === 'pendiente' && (
+        <div className="mt-5 flex flex-col gap-2 sm:flex-row">
+          <button
+            type="button"
+            onClick={() => void aceptar()}
+            disabled={enviando !== null}
+            className="flex-1 rounded-full bg-gradient-to-r from-violeta via-electrica to-cian px-6 py-3 text-sm font-semibold text-blanco transition-transform hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-50"
+          >
+            {enviando === 'aceptar' ? 'Aceptando…' : 'Acepto este plan'}
+          </button>
+          <button
+            type="button"
+            onClick={() => void conversar()}
+            disabled={enviando !== null}
+            className="rounded-full border border-blanco/20 px-6 py-3 text-sm font-semibold text-bruma transition-colors hover:border-cian/50 hover:text-cian disabled:opacity-50"
+          >
+            {enviando === 'conversar' ? 'Enviando…' : 'Quiero conversarlo'}
+          </button>
+        </div>
+      )}
+
+      {estado === 'aceptada' && (
+        <p className="mt-5 rounded-2xl border border-turquesa/30 bg-turquesa/5 px-4 py-3 text-sm leading-relaxed text-turquesa">
+          Aceptaste este plan. Falta la confirmación de nuestro equipo — te avisamos
+          por correo.
+        </p>
+      )}
+      {estado === 'conversar' && (
+        <p className="mt-5 rounded-2xl border border-amber-300/30 bg-amber-300/5 px-4 py-3 text-sm leading-relaxed text-amber-200">
+          Pediste conversarlo. Te contactaremos para ajustar los detalles antes de avanzar.
+        </p>
+      )}
+
+      {error && <p className="mt-3 text-sm text-red-300">{error}</p>}
     </section>
   )
 }
@@ -983,10 +1170,12 @@ export function VistaSolicitud({
   token,
   solicitud,
   metodosPago = [],
+  onActualizar,
 }: {
   token: string
   solicitud: SolicitudLanding
   metodosPago?: MetodoPagoPublico[] | null
+  onActualizar?: (s: SolicitudLanding) => void
 }) {
   const pendiente = ESTADOS_PENDIENTES.includes(solicitud.estado)
   const cerrada = solicitud.estado === 'rechazada' || solicitud.estado === 'expirada'
@@ -999,6 +1188,28 @@ export function VistaSolicitud({
   let vista: ReactNode
   if (cerrada) {
     vista = <VistaCerrada solicitud={solicitud} />
+  } else if (pendiente && solicitud.plan_propuesto) {
+    // onboarding-aceptacion: el plan ya está propuesto y espera al cliente.
+    vista = (
+      <>
+        <div className="text-center">
+          <h1 className="text-3xl font-bold text-blanco">Tu plan está listo</h1>
+          <p className="mt-3 text-sm leading-relaxed text-bruma">
+            Revisamos tu solicitud y preparamos este plan. Míralo y acéptalo para
+            seguir; si algo no te cuadra, conversémoslo.
+          </p>
+        </div>
+        <section className="tarjeta-vidrio rounded-3xl p-5 sm:p-6">
+          <LineaTiempo hitos={lineaDeTiempo(solicitud)} />
+        </section>
+        <TarjetaPlanPropuesto
+          solicitud={solicitud}
+          token={token}
+          onActualizar={onActualizar}
+        />
+        <TarjetaResumen solicitud={solicitud} />
+      </>
+    )
   } else if (pendiente) {
     vista = <VistaPendiente solicitud={solicitud} />
   } else if (solicitud.estado === 'aprobada') {

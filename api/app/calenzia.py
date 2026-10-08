@@ -233,3 +233,50 @@ def subir_abono_solicitud(
     except Exception:
         log.exception("No se pudo subir el abono a Calenzia")
         return 0, None
+
+
+def _post_accion_solicitud(
+    url_base: str, token: str, accion: str, error_log: str
+) -> tuple[int, dict | None]:
+    """POST sin body a `/publico/onboarding/solicitud/{token}/{accion}`.
+
+    Credencial = el token de la solicitud. Devuelve (200, dict) con la solicitud
+    actualizada, (404/409/422/502, dict con `detail`) o (0, None) si falla la red.
+    """
+    destino = (
+        f"{url_base.rstrip('/')}/api/v1/publico/onboarding/solicitud/{token}/{accion}"
+    )
+    peticion = urllib.request.Request(destino, data=b"", method="POST")
+    try:
+        with urllib.request.urlopen(peticion, timeout=20) as respuesta:
+            datos = json.loads(respuesta.read().decode("utf-8"))
+            return respuesta.status, datos if isinstance(datos, dict) else None
+    except urllib.error.HTTPError as exc:
+        try:
+            detalle = json.loads(exc.read().decode("utf-8", errors="replace"))
+            return exc.code, detalle if isinstance(detalle, dict) else None
+        except Exception:
+            return exc.code, None
+    except Exception:
+        log.exception(error_log)
+        return 0, None
+
+
+def aceptar_plan_solicitud(url_base: str, token: str) -> tuple[int, dict | None]:
+    """POST /publico/onboarding/solicitud/{token}/aceptar (onboarding-aceptacion).
+
+    El cliente acepta el plan propuesto (sin login; el token es la credencial).
+    """
+    return _post_accion_solicitud(
+        url_base, token, "aceptar", "No se pudo aceptar el plan en Calenzia"
+    )
+
+
+def pedir_cambios_plan_solicitud(url_base: str, token: str) -> tuple[int, dict | None]:
+    """POST /publico/onboarding/solicitud/{token}/pedir-cambios (onboarding-aceptacion).
+
+    El cliente pide conversar antes de aceptar.
+    """
+    return _post_accion_solicitud(
+        url_base, token, "pedir-cambios", "No se pudo pedir los cambios a Calenzia"
+    )
