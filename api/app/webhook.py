@@ -71,6 +71,14 @@ def construir_payload(compra) -> dict:
     datos = compra.datos or {}
     id_fiscal = datos.get("id_fiscal") or None
     nro_trabajadores = datos.get("nro_trabajadores")
+    # Compat: `edicion` se conserva (el webhook de Calenzia la sigue exigiendo);
+    # en el checkout nuevo se deriva del plan, y si la compra la trae guardada
+    # (flujo legacy) se respeta.
+    plan_codigo = datos.get("plan_codigo")
+    edicion = datos.get("edicion")
+    if not edicion:
+        edicion = "con_ia" if plan_codigo == "premium" else "comunicacion"
+    addons = [str(a) for a in (datos.get("addons") or [])]
     return {
         "negocio": {
             "slug": datos.get("slug"),
@@ -92,10 +100,14 @@ def construir_payload(compra) -> dict:
             if id_fiscal
             else None,
         },
-        "edicion": datos.get("edicion") or "comunicacion",
+        "edicion": edicion,
         "nro_trabajadores": int(nro_trabajadores)
         if nro_trabajadores is not None
         else 1,
+        # Selección del motor (aditivo; Calenzia la acepta junto a `edicion`).
+        "plan_codigo": plan_codigo,
+        "periodicidad_codigo": datos.get("periodicidad_codigo") or "mensual",
+        "addons": addons,
         "modulos": [m.get("modulo_codigo") for m in (compra.modulos or [])],
         "respuestas": datos.get("respuestas") or {},
     }

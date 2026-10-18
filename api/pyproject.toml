@@ -13,5 +13,34 @@ dependencies = [
     "python-multipart>=0.0.9",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "ruff>=0.7",
+    "mypy>=1.13",
+]
+
 [tool.uv]
 package = false
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+
+# Deuda heredada: `seed.py` y `rutas/admin.py` usan el estilo SQLAlchemy 1.x
+# (`Column[...]`), que mypy tipa como `Column` en accesos. No se migra acá.
+[[tool.mypy.overrides]]
+module = ["app.seed", "app.rutas.admin"]
+ignore_errors = true

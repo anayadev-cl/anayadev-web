@@ -246,6 +246,85 @@ export interface SolicitudCalenzia {
   creado_en: string | null
 }
 
+// --- Motor de planes de Calenzia (público; la web no calcula precios) ---
+export interface PlanTramoPublico {
+  codigo: string
+  nombre: string
+  min_trabajadores: number
+  max_trabajadores: number | null
+}
+
+export interface PlanPeriodicidadPublica {
+  codigo: string
+  nombre: string
+  meses: number
+  descuento_pct: number
+}
+
+export interface PlanPrecioPublico {
+  tramo_codigo: string
+  precio_persona: number
+}
+
+export interface PlanCupoPublico {
+  recurso: string
+  cantidad_persona: number
+}
+
+export interface PlanPresetPublico {
+  codigo: string
+  nombre: string
+  descripcion: string | null
+  precios: PlanPrecioPublico[]
+  cupos: PlanCupoPublico[]
+}
+
+export interface PlanFuncionPublica {
+  codigo: string
+  nombre: string
+  descripcion: string | null
+  tipo: 'base' | 'addon'
+  precios: PlanPrecioPublico[]
+}
+
+export interface PlanCatalogoPublico {
+  pais_iso: string
+  redondeo_precio: number
+  tramos: PlanTramoPublico[]
+  periodicidades: PlanPeriodicidadPublica[]
+  planes: PlanPresetPublico[]
+  funciones: PlanFuncionPublica[]
+  recursos_cupo: string[]
+}
+
+export interface PlanSimularRequest {
+  plan_codigo?: string | null
+  addons?: string[]
+  nro_trabajadores: number
+  periodicidad_codigo?: string
+  pais_iso?: string
+}
+
+export interface PlanLineaDesglose {
+  concepto: string
+  descripcion: string
+  tipo: 'base' | 'addon'
+  precio_persona: number
+}
+
+export interface PlanSimular {
+  tramo_codigo: string
+  periodicidad_codigo: string
+  descuento_pct: number
+  precio_persona_base: number
+  precio_persona: number
+  total: number
+  nro_trabajadores: number
+  cupo: Record<string, number>
+  cupo_persona: Record<string, number>
+  desglose: PlanLineaDesglose[]
+}
+
 export interface Compra {
   id: number
   codigo: string
@@ -276,6 +355,13 @@ export interface Compra {
     edicion?: 'comunicacion' | 'con_ia'
     nro_trabajadores?: number
     respuestas?: Record<string, unknown>
+    // Checkout nuevo (modelo de planes).
+    plan_codigo?: string | null
+    plan_nombre?: string | null
+    periodicidad_codigo?: string | null
+    addons?: string[]
+    tramo_codigo?: string | null
+    descuento_pct?: number | null
     calenzia?: SolicitudCalenzia | null
   }
   modulos: {

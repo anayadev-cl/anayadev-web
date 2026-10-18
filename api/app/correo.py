@@ -177,6 +177,19 @@ def enviar_correo_compra(compra) -> bool:
         for m in (compra.modulos or [])
     ) or "(sin módulos)"
     total = datos.get("total_monto") or f"{compra.total_clp} CLP"
+    # Checkout nuevo (modelo de planes): mostrar Plan + periodicidad + add-ons.
+    es_plan = "plan_codigo" in datos
+    plan_nombre = datos.get("plan_nombre") or datos.get("plan_codigo") or "Personalizado"
+    periodicidad = datos.get("periodicidad_codigo") or "—"
+    addons_txt = ", ".join(datos.get("addons") or []) or "—"
+    seleccion = (
+        f"Plan: {plan_nombre}\n"
+        f"Periodicidad: {periodicidad}\n"
+        f"Add-ons: {addons_txt}\n"
+        f"Edición (compat): {datos.get('edicion') or 'comunicacion'}\n"
+        if es_plan
+        else f"Edición: {datos.get('edicion') or 'comunicacion'}\nMódulos:\n{modulos}\n"
+    )
     cuerpo_texto = (
         "Nueva solicitud de compra en anayadev.cl\n"
         "------------------------------------------\n\n"
@@ -186,12 +199,11 @@ def enviar_correo_compra(compra) -> bool:
         f"País: {datos.get('pais', 'CL')}\n"
         f"Rubro: {datos.get('rubro_nombre', '')}\n"
         f"Equipo: {datos.get('equipo_personas') or '-'}\n"
-        f"Edición: {datos.get('edicion') or 'comunicacion'}\n"
+        f"{seleccion}"
         f"Trabajadores: {datos.get('nro_trabajadores', '-')}\n"
         f"Admin: {datos.get('admin_nombre', '')} ({datos.get('admin_correo', '')})\n"
         f"Teléfono: {datos.get('admin_telefono') or '-'}\n"
         f"{datos.get('etiqueta_id_fiscal', 'RUT')}: {datos.get('id_fiscal') or '-'}\n\n"
-        f"Módulos:\n{modulos}\n\n"
         f"Total mensual: {total}\n\n"
         "Revisa el panel Compras del CMS para reenviarla a Calenzia o "
         "activarla manualmente.\n"
@@ -210,6 +222,16 @@ def enviar_correo_cliente(compra) -> bool:
         for m in (compra.modulos or [])
     ) or "(sin módulos)"
     total = datos.get("total_monto") or f"{compra.total_clp} CLP"
+    es_plan = "plan_codigo" in datos
+    plan_nombre = datos.get("plan_nombre") or datos.get("plan_codigo") or "Personalizado"
+    periodicidad = datos.get("periodicidad_codigo") or "—"
+    addons_txt = ", ".join(datos.get("addons") or []) or "—"
+    seleccion = (
+        f"Plan: {plan_nombre}\nPeriodicidad: {periodicidad}\n"
+        f"Add-ons: {addons_txt}\n\n"
+        if es_plan
+        else f"Módulos solicitados:\n{modulos}\n\n"
+    )
     cuerpo_texto = (
         "¡Gracias por solicitar Calenzia!\n"
         "--------------------------------\n\n"
@@ -220,7 +242,7 @@ def enviar_correo_cliente(compra) -> bool:
         f"País: {datos.get('pais', 'CL')}\n"
         f"Rubro: {datos.get('rubro_nombre', '')}\n"
         f"Equipo: {datos.get('equipo_personas') or '-'}\n"
-        f"Módulos solicitados:\n{modulos}\n\n"
+        f"{seleccion}"
         f"Total mensual estimado: {total}\n\n"
         "Nuestro equipo revisará tu solicitud y te contactará a este correo "
         "para confirmar el paquete final, ajustar los límites a tu equipo y "

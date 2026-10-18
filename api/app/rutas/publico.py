@@ -1,6 +1,7 @@
 import re
 import unicodedata
 from pathlib import Path
+from typing import cast
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
@@ -19,6 +20,7 @@ from ..esquemas import (
     ContactoPeticion,
     ContactoRespuesta,
     MetodoPagoPublico,
+    PlanSimularPeticion,
 )
 from ..limites import permitido
 from ..modelos import (
@@ -163,7 +165,7 @@ def recibir_contacto(
     sesion.refresh(registro)
 
     enviar_correo_contacto(nombre, correo, mensaje)
-    return ContactoRespuesta(estado="recibido", id=registro.id)
+    return ContactoRespuesta(estado="recibido", id=cast(int, registro.id))
 
 
 @router.post("/chatbot", response_model=ChatbotRespuesta)
@@ -192,7 +194,7 @@ def responder_chatbot(
     for regla in reglas:
         claves = [
             _normalizar(c)
-            for c in re.split(r"[,\n]", regla.palabras_clave)
+            for c in re.split(r"[,\n]", str(regla.palabras_clave))
             if c.strip()
         ]
         coincidencias = sum(1 for c in claves if c and c in mensaje)
@@ -205,13 +207,14 @@ def responder_chatbot(
             sesion.query(Ajuste).filter(Ajuste.clave == "chatbot_fallback").first()
         )
         return ChatbotRespuesta(
-            respuesta=fallback.valor
+            respuesta=str(fallback.valor)
             if fallback and fallback.valor
             else "Todavía estoy aprendiendo. Escríbenos por el formulario de contacto y te respondemos pronto."
         )
 
     return ChatbotRespuesta(
-        respuesta=mejor.respuesta, sugerencias=mejor.sugerencias or []
+        respuesta=str(mejor.respuesta),
+        sugerencias=[str(s) for s in cast(list, mejor.sugerencias or [])],
     )
 
 
@@ -282,7 +285,7 @@ async def chatbot_con_adjunto(
 
 @router.get("/checkout")
 def catalogo_checkout(sesion: Session = Depends(get_sesion)):
-    valores = {a.clave: a.valor for a in sesion.query(Ajuste).all()}
+    valores = {str(a.clave): str(a.valor) for a in sesion.query(Ajuste).all()}
     url = _url_calenzia(sesion)
     paises = catalogo_paises.obtener_paises(_url_paises(valores))
 
@@ -320,12 +323,14 @@ def catalogo_checkout(sesion: Session = Depends(get_sesion)):
                 "etiqueta": n.etiqueta,
                 "ayuda": n.ayuda,
                 "modulos": [
-                    c for c in (n.modulos or []) if c in disponibles
+                    str(c)
+                    for c in cast(list, n.modulos or [])
+                    if str(c) in disponibles
                 ],
                 "incluye": [
-                    disponibles[c]["nombre"]
-                    for c in (n.modulos or [])
-                    if c in disponibles
+                    disponibles[str(c)]["nombre"]
+                    for c in cast(list, n.modulos or [])
+                    if str(c) in disponibles
                 ],
             }
             for n in necesidades
@@ -338,7 +343,7 @@ def catalogo_checkout(sesion: Session = Depends(get_sesion)):
 
 @router.get("/checkout/precios")
 def precios_checkout(pais: str, sesion: Session = Depends(get_sesion)):
-    valores = {a.clave: a.valor for a in sesion.query(Ajuste).all()}
+    valores = {str(a.clave): str(a.valor) for a in sesion.query(Ajuste).all()}
     paises = catalogo_paises.obtener_paises(_url_paises(valores))
     pais_datos = catalogo_paises.buscar_pais(paises, pais)
     if pais_datos is None:
@@ -357,6 +362,36 @@ def precios_checkout(pais: str, sesion: Session = Depends(get_sesion)):
             for concepto, monto in precios.items()
         ],
     }
+
+
+@router.get("/planes/catalogo")
+def catalogo_planes(pais_iso: str = "CL", sesion: Session = Depends(get_sesion)):
+    """Catálogo del motor de planes de Calenzia (proxy, Frente planes).
+
+    La web calcula CERO precios: pinta este catálogo y el resultado de
+    `/planes/simular`. 502 si Calenzia no responde (igual que /checkout).
+    """
+    url = _url_calenzia(sesion)
+    if not url:
+        raise HTTPException(502, "No pudimos obtener los planes. Intenta más tarde.")
+    datos = integracion_calenzia.obtener_catalogo_planes(url, pais_iso)
+    if datos is None:
+        raise HTTPException(502, "No pudimos obtener los planes. Intenta más tarde.")
+    return datos
+
+
+@router.post("/planes/simular")
+def simular_plan(
+    cuerpo: PlanSimularPeticion, sesion: Session = Depends(get_sesion)
+):
+    """Corre el motor de planes (proxy a Calenzia). Devuelve el desglose exacto."""
+    url = _url_calenzia(sesion)
+    if not url:
+        raise HTTPException(502, "No pudimos calcular tu plan. Intenta más tarde.")
+    datos = integracion_calenzia.simular_plan(url, cuerpo.model_dump())
+    if datos is None:
+        raise HTTPException(502, "No pudimos calcular tu plan. Intenta más tarde.")
+    return datos
 
 
 @router.get("/pagos", response_model=list[MetodoPagoPublico])
@@ -575,7 +610,9 @@ def consultar_slug_disponible(slug: str, sesion: Session = Depends(get_sesion)):
         )
         .all()
     )
-    ocupado = any((c.datos or {}).get("slug") == candidato for c in local)
+    ocupado = any(
+        (c.datos or {}).get("slug") == candidato for c in local  # type: ignore[call-overload]
+    )
     return {"slug": candidato, "disponible": not ocupado}
 
 
@@ -626,7 +663,7 @@ def crear_compra(cuerpo: CompraPeticion, sesion: Session = Depends(get_sesion)):
     catalogo_por_codigo = {m["codigo"]: m for m in modulos_calenzia}
 
     necesidades_existentes = {
-        n.codigo: n
+        str(n.codigo): n
         for n in sesion.query(NecesidadCheckout)
         .filter(NecesidadCheckout.activo.is_(True))
         .all()
@@ -636,7 +673,7 @@ def crear_compra(cuerpo: CompraPeticion, sesion: Session = Depends(get_sesion)):
         necesidad = necesidades_existentes.get(codigo_necesidad.strip().lower())
         if necesidad is None:
             raise HTTPException(422, f"La necesidad '{codigo_necesidad}' no existe")
-        for codigo_modulo in necesidad.modulos or []:
+        for codigo_modulo in cast(list, necesidad.modulos or []):
             if codigo_modulo == "ia":
                 # Puente temporal (bloque 1): la IA ya no es un módulo sino la
                 # edición `con_ia`; el módulo `ia` no existe en Calenzia 8.58.
@@ -659,7 +696,7 @@ def crear_compra(cuerpo: CompraPeticion, sesion: Session = Depends(get_sesion)):
                 422, f"El módulo '{codigo_modulo}' no existe en el catálogo de Calenzia"
             )
 
-    valores = {a.clave: a.valor for a in sesion.query(Ajuste).all()}
+    valores = {str(a.clave): str(a.valor) for a in sesion.query(Ajuste).all()}
     paises = catalogo_paises.obtener_paises(_url_paises(valores))
     pais_datos = catalogo_paises.buscar_pais(paises, cuerpo.pais)
     if pais_datos is None:
@@ -679,6 +716,128 @@ def crear_compra(cuerpo: CompraPeticion, sesion: Session = Depends(get_sesion)):
         cuerpo.nro_trabajadores if cuerpo.nro_trabajadores is not None else 1
     )
 
+    # --- Modelo de PLANES (checkout nuevo, aditivo) ---
+    # El front manda SIEMPRE plan_codigo/periodicidad_codigo/addons (aunque
+    # plan_codigo sea null para Personalizado). Si vienen esas claves, el precio
+    # sale del MOTOR de Calenzia y se manda al webhook EXACTAMENTE la misma
+    # tupla: lo mostrado = lo cobrado = lo aprovisionado. Sin esas claves se
+    # conserva el flujo legacy (edicion + módulos).
+    usa_plan = (
+        "plan_codigo" in cuerpo.model_fields_set
+        or "periodicidad_codigo" in cuerpo.model_fields_set
+        or "addons" in cuerpo.model_fields_set
+    )
+    if usa_plan:
+        plan_codigo = (cuerpo.plan_codigo or "").strip().lower() or None
+        periodicidad_codigo = (
+            cuerpo.periodicidad_codigo or "mensual"
+        ).strip().lower()
+        addons = [a.strip().lower() for a in cuerpo.addons if a.strip()]
+
+        catalogo = (
+            integracion_calenzia.obtener_catalogo_planes(url, pais_datos["iso"])
+            if url
+            else None
+        )
+        if catalogo is None:
+            raise HTTPException(
+                502,
+                "No pudimos verificar los planes de Calenzia. Intenta más tarde.",
+            )
+        codigos_plan = {p.get("codigo") for p in catalogo.get("planes", [])}
+        if plan_codigo is not None and plan_codigo not in codigos_plan:
+            raise HTTPException(422, "El plan seleccionado no existe")
+        codigos_periodicidad = {
+            p.get("codigo") for p in catalogo.get("periodicidades", [])
+        }
+        if periodicidad_codigo not in codigos_periodicidad:
+            raise HTTPException(422, "La periodicidad seleccionada no existe")
+        addons_validos = {
+            f.get("codigo")
+            for f in catalogo.get("funciones", [])
+            if f.get("tipo") == "addon"
+        }
+        if any(a not in addons_validos for a in addons):
+            raise HTTPException(422, "Hay un add-on que no existe")
+        if plan_codigo is not None and addons:
+            raise HTTPException(
+                422, "Los add-ons solo aplican al plan Personalizado"
+            )
+
+        # Compat: la edición se deriva del plan (premium → con_ia).
+        edicion = "con_ia" if plan_codigo == "premium" else "comunicacion"
+
+        seleccion = {
+            "plan_codigo": plan_codigo,
+            "addons": addons,
+            "nro_trabajadores": nro_trabajadores,
+            "periodicidad_codigo": periodicidad_codigo,
+            "pais_iso": pais_datos["iso"],
+        }
+        simulacion = (
+            integracion_calenzia.simular_plan(url, seleccion) if url else None
+        )
+        if simulacion is None:
+            raise HTTPException(
+                502, "No pudimos calcular tu plan. Intenta más tarde."
+            )
+        total_plan = int(simulacion.get("total") or 0)
+        total_monto_plan = catalogo_paises.formatear_monto(total_plan, pais_datos)
+        plan_nombre = next(
+            (
+                p.get("nombre")
+                for p in catalogo.get("planes", [])
+                if p.get("codigo") == plan_codigo
+            ),
+            "Personalizado",
+        )
+
+        compra = Compra(
+            codigo=uuid4().hex[:12],
+            estado="pendiente_pago",
+            datos={
+                "slug": slug,
+                "nombre_empresa": cuerpo.nombre_empresa.strip(),
+                "tipo_entidad": cuerpo.tipo_entidad,
+                "rubro_codigo": rubro_codigo,
+                "rubro_nombre": rubro["nombre"],
+                "pais": pais_datos["iso"],
+                "moneda": pais_datos["moneda"],
+                "locale": pais_datos["locale"],
+                "decimales": pais_datos["decimales"],
+                "simbolo_moneda": pais_datos["simbolo_moneda"],
+                "etiqueta_id_fiscal": pais_datos["etiqueta_id_fiscal"],
+                "prefijo_telefono": pais_datos["prefijo_telefono"],
+                "id_fiscal": id_fiscal,
+                "total_minor": total_plan,
+                "total_monto": total_monto_plan,
+                "timezone": "America/Santiago",
+                "equipo_personas": (cuerpo.equipo_personas or "").strip() or None,
+                "necesidades": [],
+                "modulos_extra": [],
+                "admin_nombre": cuerpo.admin_nombre.strip(),
+                "admin_correo": cuerpo.admin_correo.strip(),
+                "admin_telefono": (cuerpo.admin_telefono or "").strip() or None,
+                "edicion": edicion,
+                "nro_trabajadores": nro_trabajadores,
+                "plan_codigo": plan_codigo,
+                "plan_nombre": plan_nombre,
+                "periodicidad_codigo": periodicidad_codigo,
+                "addons": addons,
+                "tramo_codigo": simulacion.get("tramo_codigo"),
+                "descuento_pct": simulacion.get("descuento_pct"),
+                "respuestas": dict(cuerpo.respuestas or {}),
+            },
+            modulos=[],
+            total_clp=total_plan,
+        )
+        sesion.add(compra)
+        sesion.commit()
+        sesion.refresh(compra)
+        enviar_correo_compra(compra)
+        enviar_correo_cliente(compra)
+        return compra
+
     precios = catalogo_paises.obtener_precios_por_pais(
         _url_precios(valores), pais_datos["iso"]
     )
@@ -697,7 +856,7 @@ def crear_compra(cuerpo: CompraPeticion, sesion: Session = Depends(get_sesion)):
     # checkout — (precio_edicion × nro_trabajadores) + Σ módulos. Antes solo
     # se sumaban los módulos y el correo "Recibimos tu solicitud" mostraba
     # un total menor que el que el cliente vio en /comprar.
-    total_minor = None
+    total_minor: int | None = None
     if precios is not None:
         total_modulos_minor = sum(m["precio_mensual_clp"] for m in modulos_seleccionados)
         total_edicion = precios.get(edicion, 0) * nro_trabajadores
@@ -759,8 +918,8 @@ def pagar_compra(compra_id: int, sesion: Session = Depends(get_sesion)):
         return compra
 
     estado, respuesta = enviar_webhook_onboarding(compra, sesion)
-    compra.estado = estado
-    compra.respuesta_webhook = respuesta
+    compra.estado = estado  # type: ignore[assignment]
+    compra.respuesta_webhook = respuesta  # type: ignore[assignment]
     sesion.commit()
     sesion.refresh(compra)
     return compra

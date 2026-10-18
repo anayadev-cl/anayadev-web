@@ -9,6 +9,9 @@ import type {
   NecesidadCheckout,
   NecesidadPublica,
   Pais,
+  PlanCatalogoPublico,
+  PlanSimular,
+  PlanSimularRequest,
   Producto,
   ReglaChatbot,
   RubroCheckout,
@@ -87,6 +90,24 @@ export const api = {
     modulos: { modulo_codigo: string; monto_minor: number }[]
   }> => (await pedir(`/api/v1/publico/checkout/precios?pais=${encodeURIComponent(pais)}`)).json(),
 
+  // Motor de planes (proxy a Calenzia). La web NO calcula precios.
+  planesCatalogo: async (
+    paisIso = 'CL',
+  ): Promise<PlanCatalogoPublico> =>
+    (
+      await pedir(
+        `/api/v1/publico/planes/catalogo?pais_iso=${encodeURIComponent(paisIso)}`,
+      )
+    ).json(),
+
+  simularPlan: async (payload: PlanSimularRequest): Promise<PlanSimular> =>
+    (
+      await pedir('/api/v1/publico/planes/simular', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      })
+    ).json(),
+
   slugDisponible: async (
     slug: string,
   ): Promise<{ slug: string; disponible: boolean }> =>
@@ -108,6 +129,9 @@ export const api = {
     edicion: 'comunicacion' | 'con_ia'
     nro_trabajadores: number
     respuestas?: Record<string, unknown>
+    plan_codigo?: string | null
+    periodicidad_codigo?: string
+    addons?: string[]
   }): Promise<Compra> =>
     (await pedir('/api/v1/publico/compras', {
       method: 'POST',

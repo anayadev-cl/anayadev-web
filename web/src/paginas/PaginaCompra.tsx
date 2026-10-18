@@ -1,9 +1,16 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { FondoCircuito } from '../componentes/FondoCircuito'
 import { Marca } from '../componentes/Marca'
 import { api } from '../lib/api'
 import { formatearMonto } from '../lib/paises'
-import type { Compra, Pais } from '../lib/tipos'
+import type {
+  Compra,
+  Pais,
+  PlanCatalogoPublico,
+  PlanSimular,
+  PlanSimularRequest,
+  PlanTramoPublico,
+} from '../lib/tipos'
 import {
   TELEFONO_DIGITOS_POR_PAIS,
   formatearRut,
@@ -13,12 +20,6 @@ import {
 } from '../lib/validaciones'
 
 const PASOS = ['Tu negocio', 'Tu plan', 'Tu equipo', 'Enviar']
-
-interface ModuloCatalogo {
-  codigo: string
-  nombre: string
-  descripcion: string
-}
 
 const entrada =
   'w-full rounded-xl border border-blanco/12 bg-abisal/80 px-4 py-3 text-sm text-blanco outline-none transition-colors placeholder:text-bruma/40 focus:border-cian/50 focus:ring-1 focus:ring-cian/30'
@@ -36,144 +37,56 @@ function etiquetaEquipo(nroTrabajadores: number): string {
   return `${nroTrabajadores} ${nroTrabajadores === 1 ? 'persona' : 'personas'}`
 }
 
-const NECESIDAD_BASE = 'reservas_online'
-
-// Siempre incluidos, no se preguntan: `agenda` es la base del plan (se cobra)
-// y `agendamiento_publico` (reservas en línea) va gratis con ella.
-const MODULOS_BASE = ['agenda', 'agendamiento_publico']
-
-interface PreguntaPlan {
-  // Clave de `respuestas` que lee el motor de sugerencias de Calenzia
-  // (reglas.py). `null` = sin clave (encuestas: gratis, no se sugiere).
-  clave: string | null
-  modulo: string
-  pregunta: string
-  grupo: 'dia' | 'crece'
-}
-
-const PREGUNTAS_PLAN: PreguntaPlan[] = [
-  {
-    clave: 'atiende_por_whatsapp',
-    modulo: 'whatsapp',
-    pregunta: '¿Atiendes por WhatsApp?',
-    grupo: 'dia',
-  },
-  {
-    clave: 'envia_promociones',
-    modulo: 'campanas',
-    pregunta: '¿Haces promociones?',
-    grupo: 'dia',
-  },
-  {
-    clave: 'vende_productos',
-    modulo: 'inventario',
-    pregunta: '¿Vendes productos o stock?',
-    grupo: 'dia',
-  },
-  {
-    clave: 'cotiza_antes_de_atender',
-    modulo: 'presupuestos',
-    pregunta: '¿Envías presupuestos antes de atender?',
-    grupo: 'dia',
-  },
-  {
-    clave: 'necesita_reportes',
-    modulo: 'reportes_avanzados',
-    pregunta: '¿Quieres reportes de tu negocio?',
-    grupo: 'crece',
-  },
-  {
-    clave: 'quiere_marca_propia',
-    modulo: 'branding_avanzado',
-    pregunta: '¿Quieres ocultar la marca Calenzia y que todo se vea como tuyo?',
-    grupo: 'crece',
-  },
-  {
-    clave: null,
-    modulo: 'encuestas',
-    pregunta: '¿Quieres hacer encuestas o que tus clientes dejen reseñas?',
-    grupo: 'crece',
-  },
-]
-
-const CLAVE_POR_MODULO: Record<string, string> = Object.fromEntries(
-  PREGUNTAS_PLAN.filter(
-    (p): p is PreguntaPlan & { clave: string } => p.clave !== null,
-  ).map((p) => [p.modulo, p.clave]),
-)
-
-const EDICIONES: { codigo: 'comunicacion' | 'con_ia'; nombre: string }[] = [
-  { codigo: 'comunicacion', nombre: 'Comunicación' },
-  { codigo: 'con_ia', nombre: 'Con IA' },
-]
-
-function BotonesSiNo({ valor, alCambiar }: { valor: boolean; alCambiar: () => void }) {
+function tramoPara(
+  nroTrabajadores: number,
+  tramos: PlanTramoPublico[],
+): PlanTramoPublico | undefined {
+  const ordenados = [...tramos].sort((a, b) => a.min_trabajadores - b.min_trabajadores)
   return (
-    <div className="flex shrink-0 gap-0.5 rounded-full border border-blanco/15 p-0.5">
-      {[
-        { etiqueta: 'Sí', marcado: true },
-        { etiqueta: 'No', marcado: false },
-      ].map((opcion) => (
-        <button
-          key={String(opcion.marcado)}
-          type="button"
-          onClick={() => {
-            if (valor !== opcion.marcado) alCambiar()
-          }}
-          className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
-            valor === opcion.marcado
-              ? 'bg-cian/20 text-cian'
-              : 'text-bruma/60 hover:text-bruma'
-          }`}
-        >
-          {opcion.etiqueta}
-        </button>
-      ))}
-    </div>
+    ordenados.find(
+      (t) =>
+        nroTrabajadores >= t.min_trabajadores &&
+        (t.max_trabajadores === null || nroTrabajadores <= t.max_trabajadores),
+    ) ?? ordenados[0]
   )
 }
 
-function FilaPregunta({
-  pregunta,
-  activo,
-  etiqueta,
-  alCambiar,
-}: {
-  pregunta: string
-  activo: boolean
-  etiqueta: string
-  alCambiar: () => void
-}) {
-  return (
-    <div
-      className={`rounded-2xl border p-4 transition-all ${
-        activo ? 'border-cian/50 bg-cian/5' : 'border-blanco/10 bg-abisal/60'
-      }`}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-sm font-semibold text-blanco">{pregunta}</p>
-          <p
-            className={`mt-0.5 text-xs font-semibold ${
-              activo ? 'text-cian/80' : 'text-bruma/60'
-            }`}
-          >
-            {etiqueta}
-          </p>
-        </div>
-        <BotonesSiNo valor={activo} alCambiar={alCambiar} />
-      </div>
-    </div>
-  )
+function nombreRecurso(recurso: string): string {
+  if (recurso === 'conversaciones') return 'conversaciones del bot'
+  if (recurso === 'recordatorios') return 'recordatorios por WhatsApp'
+  if (recurso === 'gemas') return 'gemas de IA'
+  return recurso
+}
+
+function leerHandoff(): {
+  plan: string | null
+  trabajadores: string | null
+  periodicidad: string | null
+  addons: string[]
+} {
+  if (typeof window === 'undefined') {
+    return { plan: null, trabajadores: null, periodicidad: null, addons: [] }
+  }
+  const params = new URLSearchParams(window.location.search)
+  const addons = (params.get('addons') || '')
+    .split(',')
+    .map((a) => a.trim())
+    .filter(Boolean)
+  return {
+    plan: params.get('plan'),
+    trabajadores: params.get('trabajadores'),
+    periodicidad: params.get('periodicidad'),
+    addons,
+  }
 }
 
 export function PaginaCompra() {
-  const [modulosCatalogo, setModulosCatalogo] = useState<ModuloCatalogo[]>([])
+  const handoff = useMemo(leerHandoff, [])
+
   const [rubros, setRubros] = useState<{ codigo: string; nombre: string }[]>([])
   const [paises, setPaises] = useState<Pais[]>([])
+  const [planes, setPlanes] = useState<PlanCatalogoPublico | null>(null)
   const [paisIso, setPaisIso] = useState('CL')
-  const [precios, setPrecios] = useState<Record<string, number>>({})
-  const [preciosPais, setPreciosPais] = useState<Pais | null>(null)
   const [cargando, setCargando] = useState(true)
   const [paso, setPaso] = useState(0)
 
@@ -183,25 +96,21 @@ export function PaginaCompra() {
   const [estadoSlug, setEstadoSlug] = useState<'comprobando' | 'libre' | 'ocupado' | null>(null)
   const [tipoEntidad, setTipoEntidad] = useState('empresa')
   const [rubroCodigo, setRubroCodigo] = useState('')
-  const [nroTrabajadores, setNroTrabajadores] = useState('1')
+  const [nroTrabajadores, setNroTrabajadores] = useState(handoff.trabajadores ?? '1')
 
   const [adminNombre, setAdminNombre] = useState('')
   const [adminCorreo, setAdminCorreo] = useState('')
   const [adminTelefono, setAdminTelefono] = useState('')
   const [idFiscal, setIdFiscal] = useState('')
 
-  const [respuestasPlan, setRespuestasPlan] = useState<Record<string, boolean>>({
-    responde_fuera_de_horario: false,
-    whatsapp: false,
-    campanas: false,
-    inventario: false,
-    presupuestos: false,
-    reportes_avanzados: false,
-    branding_avanzado: false,
-    encuestas: false,
-  })
-  const [ajustes, setAjustes] = useState<Record<string, boolean>>({})
-  const [ajusteAbierto, setAjusteAbierto] = useState(false)
+  // Selección del plan. `planSeleccion`: código de preset o 'personalizado'.
+  const [planSeleccion, setPlanSeleccion] = useState<string | null>(
+    handoff.plan && handoff.plan !== 'null' ? handoff.plan : null,
+  )
+  const [periodicidad, setPeriodicidad] = useState(handoff.periodicidad ?? 'mensual')
+  const [addons, setAddons] = useState<string[]>(handoff.addons)
+  const [simulacion, setSimulacion] = useState<PlanSimular | null>(null)
+  const [simulando, setSimulando] = useState(false)
 
   const [enviando, setEnviando] = useState(false)
   const [error, setError] = useState('')
@@ -212,7 +121,6 @@ export function PaginaCompra() {
       .checkoutCatalogo()
       .then((datos) => {
         setRubros(datos.rubros)
-        setModulosCatalogo(datos.modulos ?? [])
         setPaises(datos.paises ?? [])
         if (datos.rubros.length > 0) setRubroCodigo(datos.rubros[0].codigo)
       })
@@ -220,30 +128,89 @@ export function PaginaCompra() {
       .finally(() => setCargando(false))
   }, [])
 
-  const paisActual = paises.find((p) => p.iso === paisIso) ?? null
-
   useEffect(() => {
-    if (!paisIso) return
     let activo = true
     api
-      .preciosCheckout(paisIso)
+      .planesCatalogo(paisIso)
       .then((datos) => {
-        if (!activo) return
-        setPreciosPais(datos.pais)
-        setPrecios(
-          Object.fromEntries(datos.modulos.map((m) => [m.modulo_codigo, m.monto_minor])),
-        )
+        if (activo) setPlanes(datos)
       })
       .catch(() => {
-        if (activo) {
-          setPreciosPais(null)
-          setPrecios({})
-        }
+        if (activo) setError('No pudimos cargar los planes. Recarga la página.')
       })
     return () => {
       activo = false
     }
   }, [paisIso])
+
+  // Valida el handoff cuando llega el catálogo: descarta plan/periodicidad/
+  // add-ons que no existan para que la simulación y el envío coincidan.
+  useEffect(() => {
+    if (!planes) return
+    const addonsValidos = new Set(
+      planes.funciones.filter((f) => f.tipo === 'addon').map((f) => f.codigo),
+    )
+    setPlanSeleccion((prev) =>
+      prev && prev !== 'personalizado' && !planes.planes.some((p) => p.codigo === prev)
+        ? null
+        : prev,
+    )
+    setPeriodicidad((prev) =>
+      planes.periodicidades.some((p) => p.codigo === prev)
+        ? prev
+        : (planes.periodicidades[0]?.codigo ?? 'mensual'),
+    )
+    setAddons((prev) => prev.filter((a) => addonsValidos.has(a)))
+  }, [planes])
+
+  const paisActual = paises.find((p) => p.iso === paisIso) ?? null
+  const trabajadoresValidos = numeroTrabajadoresValido(nroTrabajadores)
+  const equipoEtiqueta = trabajadoresValidos === null ? '—' : etiquetaEquipo(trabajadoresValidos)
+
+  // La MISMA tupla se usa para simular y para enviar al webhook:
+  // lo mostrado = lo cobrado = lo aprovisionado.
+  function seleccion(): PlanSimularRequest {
+    const planCodigo = planSeleccion === 'personalizado' ? null : planSeleccion
+    return {
+      plan_codigo: planCodigo,
+      addons: planSeleccion === 'personalizado' ? [...addons].sort() : [],
+      nro_trabajadores: trabajadoresValidos ?? 1,
+      periodicidad_codigo: periodicidad,
+      pais_iso: paisIso,
+    }
+  }
+
+  useEffect(() => {
+    if (planSeleccion === null || trabajadoresValidos === null) {
+      setSimulacion(null)
+      return
+    }
+    let activo = true
+    setSimulando(true)
+    const temporizador = setTimeout(() => {
+      api
+        .simularPlan(seleccion())
+        .then((datos) => {
+          if (activo) {
+            setSimulacion(datos)
+            setError('')
+          }
+        })
+        .catch(() => {
+          if (activo) {
+            setSimulacion(null)
+            setError('No pudimos calcular el plan. Revisa la conexión e intenta de nuevo.')
+          }
+        })
+        .finally(() => {
+          if (activo) setSimulando(false)
+        })
+    }, 250)
+    return () => {
+      activo = false
+      clearTimeout(temporizador)
+    }
+  }, [planSeleccion, addons, periodicidad, nroTrabajadores, paisIso])
 
   useEffect(() => {
     if (!slug || !slugValido()) {
@@ -260,52 +227,34 @@ export function PaginaCompra() {
     return () => clearTimeout(temporizador)
   }, [slug])
 
-  // Al avanzar o retroceder de paso, los datos quedan en el estado (nada se
-  // pierde) y la vista vuelve arriba del formulario para continuar sin
-  // perder el hilo.
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'auto' })
   }, [paso])
 
-  const trabajadoresValidos = numeroTrabajadoresValido(nroTrabajadores)
-  const equipoEtiqueta = trabajadoresValidos === null ? '—' : etiquetaEquipo(trabajadoresValidos)
+  const tramoActual =
+    simulacion?.tramo_codigo ??
+    (planes && trabajadoresValidos !== null
+      ? tramoPara(trabajadoresValidos, planes.tramos)?.codigo
+      : undefined)
 
-  // La edición sale de la primera pregunta: «¿Quieres que el sistema responda
-  // solo?» (sí = con_ia). Su clave de respuesta es la que Calenzia ya lee
-  // (`responde_fuera_de_horario`).
-  const edicion = respuestasPlan.responde_fuera_de_horario ? 'con_ia' : 'comunicacion'
+  const periodicidadActual = planes?.periodicidades.find((p) => p.codigo === periodicidad)
 
-  function moduloActivo(modulo: string): boolean {
-    if (modulo in ajustes) return !!ajustes[modulo]
-    return !!respuestasPlan[modulo]
+  function precioPreset(codigo: string): number | null {
+    const plan = planes?.planes.find((p) => p.codigo === codigo)
+    const precio = plan?.precios.find((x) => x.tramo_codigo === tramoActual)
+    return precio ? precio.precio_persona : null
   }
 
-  const modulosContratados = [
-    ...MODULOS_BASE,
-    ...PREGUNTAS_PLAN.filter((p) => moduloActivo(p.modulo)).map((p) => p.modulo),
-  ]
-
-  function nombreModulo(codigo: string): string {
-    return modulosCatalogo.find((m) => m.codigo === codigo)?.nombre ?? codigo
+  function precioAddon(codigo: string): number | null {
+    const funcion = planes?.funciones.find((f) => f.codigo === codigo)
+    const precio = funcion?.precios.find((x) => x.tramo_codigo === tramoActual)
+    return precio ? precio.precio_persona : null
   }
 
-  const nombresContratados = modulosContratados.map(nombreModulo)
-  const nombresExtras = PREGUNTAS_PLAN.filter((p) => moduloActivo(p.modulo)).map((p) =>
-    nombreModulo(p.modulo),
-  )
-
-  const totalModulos = modulosContratados.reduce(
-    (suma, codigo) => suma + (precios[codigo] ?? 0),
-    0,
-  )
-  const totalEdicion = (precios[edicion] ?? 0) * (trabajadoresValidos ?? 1)
-  const totalMinor = totalModulos + totalEdicion
-  const totalFormateado = formatearMonto(preciosPais, totalMinor)
-
-  function etiquetaPrecio(codigo: string): string {
-    const precio = precios[codigo] ?? 0
-    if (precio <= 0) return 'Incluido — no suma al total'
-    return `Suma ${formatearMonto(preciosPais, precio)}/mes`
+  function alternarAddon(codigo: string) {
+    setAddons((prev) =>
+      prev.includes(codigo) ? prev.filter((a) => a !== codigo) : [...prev, codigo],
+    )
   }
 
   function generarSlug(nombre: string) {
@@ -330,8 +279,11 @@ export function PaginaCompra() {
         slugValido() &&
         estadoSlug !== 'ocupado' &&
         rubroCodigo.length > 0 &&
-        numeroTrabajadoresValido(nroTrabajadores) !== null
+        trabajadoresValidos !== null
       )
+    }
+    if (paso === 1) {
+      return planSeleccion !== null && trabajadoresValidos !== null && simulacion !== null
     }
     if (paso === 2) {
       const correoValido = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(adminCorreo.trim())
@@ -353,53 +305,36 @@ export function PaginaCompra() {
     return true
   }
 
-  function alternarRespuesta(modulo: string) {
-    setRespuestasPlan({ ...respuestasPlan, [modulo]: !respuestasPlan[modulo] })
-    // La pregunta vuelve a mandar: cualquier ajuste manual queda sin efecto.
-    const nuevosAjustes = { ...ajustes }
-    delete nuevosAjustes[modulo]
-    setAjustes(nuevosAjustes)
-  }
-
-  function elegirEdicion(conIa: boolean) {
-    setRespuestasPlan({ ...respuestasPlan, responde_fuera_de_horario: conIa })
-  }
-
-  function alternarAjuste(modulo: string) {
-    setAjustes({ ...ajustes, [modulo]: !moduloActivo(modulo) })
-  }
-
-  // Pulido 2: un solo botón — crea el pedido y lo envía al webhook de una.
-  // Antes eran dos clics ("Revisar solicitud" y luego "Enviar mi solicitud").
   async function enviarSolicitud() {
     setError('')
     setEnviando(true)
     try {
-      const trabajadores = numeroTrabajadoresValido(nroTrabajadores)
-      const respuestas: Record<string, boolean> = {
-        responde_fuera_de_horario: edicion === 'con_ia',
+      const trabajadores = trabajadoresValidos
+      if (trabajadores === null || planSeleccion === null || simulacion === null) {
+        throw new Error('Completa tu plan antes de enviar.')
       }
-      for (const [modulo, clave] of Object.entries(CLAVE_POR_MODULO)) {
-        respuestas[clave] = moduloActivo(modulo)
-      }
+      const sel = seleccion()
+      const edicion = sel.plan_codigo === 'premium' ? 'con_ia' : 'comunicacion'
       const compra = await api.crearCompra({
         slug,
         nombre_empresa: nombreEmpresa,
         tipo_entidad: tipoEntidad,
         rubro_codigo: rubroCodigo,
         pais: paisIso,
-        equipo_personas: trabajadores === null ? null : etiquetaEquipo(trabajadores),
+        equipo_personas: etiquetaEquipo(trabajadores),
         admin_nombre: adminNombre,
         admin_correo: adminCorreo,
         admin_telefono: adminTelefono || null,
         id_fiscal: idFiscal || null,
-        necesidades: [NECESIDAD_BASE],
-        modulos_extra: PREGUNTAS_PLAN.filter((p) => moduloActivo(p.modulo)).map(
-          (p) => p.modulo,
-        ),
+        necesidades: [],
+        modulos_extra: [],
         edicion,
-        nro_trabajadores: trabajadores ?? 1,
-        respuestas,
+        nro_trabajadores: trabajadores,
+        respuestas: { responde_fuera_de_horario: edicion === 'con_ia' },
+        // Invariante: misma selección que se cotizó con /simular.
+        plan_codigo: sel.plan_codigo,
+        periodicidad_codigo: sel.periodicidad_codigo,
+        addons: sel.addons,
       })
       const enviada = await api.enviarSolicitud(compra.id)
       setResultado(enviada)
@@ -477,6 +412,15 @@ export function PaginaCompra() {
     )
   }
 
+  const planNombre =
+    planSeleccion === 'personalizado'
+      ? 'Personalizado'
+      : planes?.planes.find((p) => p.codigo === planSeleccion)?.nombre ?? '—'
+  const addonsTxt =
+    (planSeleccion === 'personalizado' ? addons : [])
+      .map((codigo) => planes?.funciones.find((f) => f.codigo === codigo)?.nombre ?? codigo)
+      .join(', ') || '—'
+
   return (
     <div className="relative min-h-screen">
       <FondoCircuito />
@@ -504,16 +448,14 @@ export function PaginaCompra() {
             <span className="texto-gradiente">Calenzia</span> lista
           </h1>
           <p className="mt-3 text-sm leading-relaxed text-bruma">
-            Unas preguntas y queda funcionando. Por ahora Calenzia está
-            disponible en Chile.
+            Elige tu plan y déjanos tus datos. Por ahora Calenzia está disponible
+            en Chile.
           </p>
         </div>
 
         <ol className="mt-10 flex items-center justify-center gap-1 sm:gap-2">
           {PASOS.map((etiqueta, i) => (
             <li key={etiqueta} className="flex items-center gap-1 sm:gap-2">
-              {/* Pulido 3: los pasos YA visitados son clicables para volver
-                  sin perder lo cargado (el estado vive en el componente). */}
               <button
                 type="button"
                 disabled={i >= paso}
@@ -521,9 +463,7 @@ export function PaginaCompra() {
                 title={i < paso ? `Volver a ${etiqueta}` : undefined}
                 aria-label={i < paso ? `Volver a ${etiqueta}` : etiqueta}
                 className={`group flex items-center gap-1 sm:gap-2 ${
-                  i < paso
-                    ? 'cursor-pointer'
-                    : 'cursor-default'
+                  i < paso ? 'cursor-pointer' : 'cursor-default'
                 }`}
               >
                 <span
@@ -644,10 +584,8 @@ export function PaginaCompra() {
                       </span>
                     ) : (
                       <span className="mt-1.5 block text-xs text-bruma/60">
-                        Este número es referencial: es el punto de partida para
-                        calcular tu plan. Después, desde la plataforma, puedes
-                        pedir sumar o quitar trabajadores cuando lo necesites y
-                        tu plan se ajusta solo.
+                        Este número define el tramo de precio. Después puedes
+                        sumar o quitar trabajadores y tu plan se ajusta solo.
                       </span>
                     )}
                   </label>
@@ -722,43 +660,53 @@ export function PaginaCompra() {
             {paso === 1 && (
               <div className="space-y-6">
                 <div>
-                  <h2 className="text-lg font-semibold text-blanco">
-                    Arma tu plan
-                  </h2>
+                  <h2 className="text-lg font-semibold text-blanco">Elige tu plan</h2>
                   <p className="mt-1 text-sm text-bruma">
-                    La agenda con reservas en línea viene incluida. Responde
-                    unas preguntas y tu plan queda armado: cada «sí» suma su
-                    módulo y el total se actualiza solo.
+                    Precios por persona según tu equipo. El tramo y el total los
+                    calcula Calenzia: acá solo ves lo que el motor devuelve.
                   </p>
                 </div>
 
                 <div>
                   <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-bruma/70">
-                    Tu edición
+                    Periodicidad
                   </span>
-                  <p className="mb-2 text-base font-semibold text-blanco">
-                    ¿Quieres que el sistema responda solo?
-                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {(planes?.periodicidades ?? []).map((p) => (
+                      <button
+                        key={p.codigo}
+                        type="button"
+                        onClick={() => setPeriodicidad(p.codigo)}
+                        className={`rounded-full border px-4 py-2 text-sm font-semibold transition-all ${
+                          periodicidad === p.codigo
+                            ? 'border-cian/60 bg-cian/10 text-cian'
+                            : 'border-blanco/15 text-bruma hover:border-blanco/30'
+                        }`}
+                      >
+                        {p.nombre}
+                        {p.descuento_pct !== 0 && (
+                          <span className="ml-1 text-turquesa">
+                            −{Math.abs(p.descuento_pct)}%
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-bruma/70">
+                    Plan
+                  </span>
                   <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-                    {[
-                      {
-                        codigo: 'con_ia' as const,
-                        etiqueta: 'Sí — Con IA',
-                        detalle:
-                          'El asistente responde y agenda por ti, incluso fuera de horario.',
-                      },
-                      {
-                        codigo: 'comunicacion' as const,
-                        etiqueta: 'No — Comunicación',
-                        detalle: 'Tú y tu equipo atienden las conversaciones.',
-                      },
-                    ].map((opcion) => {
-                      const activo = edicion === opcion.codigo
+                    {(planes?.planes ?? []).map((plan) => {
+                      const precio = precioPreset(plan.codigo)
+                      const activo = planSeleccion === plan.codigo
                       return (
                         <button
-                          key={opcion.codigo}
+                          key={plan.codigo}
                           type="button"
-                          onClick={() => elegirEdicion(opcion.codigo === 'con_ia')}
+                          onClick={() => setPlanSeleccion(plan.codigo)}
                           className={`rounded-2xl border p-4 text-left transition-all ${
                             activo
                               ? 'border-cian/60 bg-cian/10 shadow-[0_0_26px_-14px_rgba(0,223,240,0.6)]'
@@ -767,7 +715,7 @@ export function PaginaCompra() {
                         >
                           <span className="flex items-center justify-between gap-2">
                             <span className="text-sm font-semibold text-blanco">
-                              {opcion.etiqueta}
+                              {plan.nombre}
                             </span>
                             <span
                               className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[11px] font-bold ${
@@ -779,136 +727,146 @@ export function PaginaCompra() {
                               ✓
                             </span>
                           </span>
-                          <span className="mt-1 block text-xs leading-relaxed text-bruma">
-                            {opcion.detalle}
-                          </span>
+                          {plan.descripcion && (
+                            <span className="mt-1 block text-xs leading-relaxed text-bruma">
+                              {plan.descripcion}
+                            </span>
+                          )}
                           <span className="mt-1.5 block text-xs font-semibold text-cian">
-                            {formatearMonto(preciosPais, precios[opcion.codigo] ?? 0)} /
-                            persona / mes
+                            {precio === null
+                              ? '—'
+                              : `${formatearMonto(paisActual, precio)} / persona / mes`}
                           </span>
                         </button>
                       )
                     })}
+                    <button
+                      type="button"
+                      onClick={() => setPlanSeleccion('personalizado')}
+                      className={`rounded-2xl border p-4 text-left transition-all ${
+                        planSeleccion === 'personalizado'
+                          ? 'border-cian/60 bg-cian/10 shadow-[0_0_26px_-14px_rgba(0,223,240,0.6)]'
+                          : 'border-blanco/10 bg-abisal/60 hover:border-blanco/25'
+                      }`}
+                    >
+                      <span className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-semibold text-blanco">
+                          Personalizado
+                        </span>
+                        <span
+                          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[11px] font-bold ${
+                            planSeleccion === 'personalizado'
+                              ? 'border-turquesa bg-turquesa/20 text-turquesa'
+                              : 'border-blanco/25 text-transparent'
+                          }`}
+                        >
+                          ✓
+                        </span>
+                      </span>
+                      <span className="mt-1 block text-xs leading-relaxed text-bruma">
+                        Base Básico + los add-ons que elijas abajo.
+                      </span>
+                    </button>
                   </div>
                 </div>
 
-                <div>
-                  <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-bruma/70">
-                    Tu día a día
-                  </span>
-                  <div className="space-y-2.5">
-                    {PREGUNTAS_PLAN.filter((p) => p.grupo === 'dia').map((pregunta) => (
-                      <FilaPregunta
-                        key={pregunta.modulo}
-                        pregunta={pregunta.pregunta}
-                        activo={moduloActivo(pregunta.modulo)}
-                        etiqueta={etiquetaPrecio(pregunta.modulo)}
-                        alCambiar={() => alternarRespuesta(pregunta.modulo)}
-                      />
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-bruma/70">
-                    Marca y crecimiento
-                  </span>
-                  <div className="space-y-2.5">
-                    {PREGUNTAS_PLAN.filter((p) => p.grupo === 'crece').map((pregunta) => (
-                      <FilaPregunta
-                        key={pregunta.modulo}
-                        pregunta={pregunta.pregunta}
-                        activo={moduloActivo(pregunta.modulo)}
-                        etiqueta={etiquetaPrecio(pregunta.modulo)}
-                        alCambiar={() => alternarRespuesta(pregunta.modulo)}
-                      />
-                    ))}
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between rounded-2xl border border-cian/30 bg-cian/5 px-5 py-4">
+                {planSeleccion === 'personalizado' && (
                   <div>
-                    <span className="block text-sm font-semibold text-bruma">
-                      Total mensual
+                    <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-bruma/70">
+                      Add-ons
                     </span>
-                    <span className="block text-xs text-bruma/60">
-                      para {equipoEtiqueta} — la edición se cobra por persona
-                    </span>
-                  </div>
-                  <span className="text-2xl font-bold texto-gradiente">
-                    {totalFormateado}
-                  </span>
-                </div>
-
-                <div className="rounded-2xl border border-blanco/10 bg-abisal/60 p-4">
-                  <p className="text-sm leading-relaxed text-bruma">
-                    <span className="font-semibold text-blanco">Tu plan:</span>{' '}
-                    {EDICIONES.find((o) => o.codigo === edicion)?.nombre} (×
-                    {trabajadoresValidos ?? 1})
-                    {nombresExtras.length > 0 && `, ${nombresExtras.join(', ')}`} ={' '}
-                    <span className="font-semibold text-cian">
-                      {totalFormateado}/mes
-                    </span>
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => setAjusteAbierto((abierto) => !abierto)}
-                    className="mt-3 text-sm font-semibold text-cian hover:text-turquesa"
-                  >
-                    {ajusteAbierto ? 'Ocultar ajustes' : '¿Quieres afinar tu plan?'}
-                  </button>
-                  {ajusteAbierto && (
-                    <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                      {PREGUNTAS_PLAN.map((pregunta) => {
-                        const activo = moduloActivo(pregunta.modulo)
-                        const precio = precios[pregunta.modulo] ?? 0
-                        return (
-                          <button
-                            key={pregunta.modulo}
-                            type="button"
-                            onClick={() => alternarAjuste(pregunta.modulo)}
-                            className={`flex items-center gap-3 rounded-xl border px-3.5 py-2.5 text-left transition-all ${
-                              activo
-                                ? 'border-cian/50 bg-cian/5'
-                                : 'border-blanco/10 bg-abisal/60 hover:border-blanco/25'
-                            }`}
-                          >
-                            <span
-                              className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border text-[11px] font-bold ${
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      {(planes?.funciones ?? [])
+                        .filter((f) => f.tipo === 'addon')
+                        .map((funcion) => {
+                          const activo = addons.includes(funcion.codigo)
+                          const precio = precioAddon(funcion.codigo)
+                          return (
+                            <button
+                              key={funcion.codigo}
+                              type="button"
+                              onClick={() => alternarAddon(funcion.codigo)}
+                              className={`flex items-center gap-3 rounded-xl border px-3.5 py-2.5 text-left transition-all ${
                                 activo
-                                  ? 'border-turquesa bg-turquesa/20 text-turquesa'
-                                  : 'border-blanco/25 text-transparent'
+                                  ? 'border-cian/50 bg-cian/5'
+                                  : 'border-blanco/10 bg-abisal/60 hover:border-blanco/25'
                               }`}
                             >
-                              ✓
-                            </span>
-                            <span className="flex-1">
-                              <span className="block text-sm font-semibold text-blanco">
-                                {nombreModulo(pregunta.modulo)}
+                              <span
+                                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border text-[11px] font-bold ${
+                                  activo
+                                    ? 'border-turquesa bg-turquesa/20 text-turquesa'
+                                    : 'border-blanco/25 text-transparent'
+                                }`}
+                              >
+                                ✓
                               </span>
-                              <span className="block text-xs text-bruma/70">
-                                {precio > 0
-                                  ? `${formatearMonto(preciosPais, precio)}/mes`
-                                  : 'Incluido'}
+                              <span className="flex-1">
+                                <span className="block text-sm font-semibold text-blanco">
+                                  {funcion.nombre}
+                                </span>
+                                <span className="block text-xs text-bruma/70">
+                                  {precio === null
+                                    ? '—'
+                                    : `${formatearMonto(paisActual, precio)} / persona / mes`}
+                                </span>
                               </span>
-                            </span>
-                          </button>
-                        )
-                      })}
+                            </button>
+                          )
+                        })}
                     </div>
+                  </div>
+                )}
+
+                <div className="rounded-2xl border border-cian/30 bg-cian/5 p-5">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <span className="block text-sm font-semibold text-bruma">
+                        Total {periodicidadActual ? `(${periodicidadActual.nombre})` : ''}
+                      </span>
+                      <span className="block text-xs text-bruma/60">
+                        para {equipoEtiqueta}
+                        {simulacion ? ` · tramo ${simulacion.tramo_codigo}` : ''}
+                        {simulacion && simulacion.descuento_pct !== 0
+                          ? ` · ${simulacion.descuento_pct}% por periodicidad`
+                          : ''}
+                      </span>
+                    </div>
+                    <span className="text-2xl font-bold texto-gradiente">
+                      {simulando
+                        ? '…'
+                        : simulacion
+                          ? formatearMonto(paisActual, simulacion.total)
+                          : '—'}
+                    </span>
+                  </div>
+                  {simulacion && simulacion.desglose.length > 0 && (
+                    <ul className="mt-3 space-y-1 border-t border-blanco/10 pt-3 text-xs text-bruma/80">
+                      {simulacion.desglose.map((linea) => (
+                        <li key={linea.concepto} className="flex justify-between gap-3">
+                          <span>{linea.descripcion}</span>
+                          <span>
+                            {formatearMonto(paisActual, linea.precio_persona)} / persona
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
                   )}
-                  <p className="mt-3 text-xs leading-relaxed text-bruma/60">
-                    Los límites de tu plan se ajustan al tamaño de tu equipo.
-                    ¿Necesitas algo más especial?{' '}
-                    <a
-                      href="/#contacto"
-                      className="font-semibold text-cian hover:text-turquesa"
-                    >
-                      Conversemos y lo armamos contigo
-                    </a>
-                    .
-                  </p>
+                  {simulacion && simulacion.cupo && (
+                    <p className="mt-3 text-xs leading-relaxed text-bruma/60">
+                      Incluye{' '}
+                      {Object.entries(simulacion.cupo)
+                        .map(([recurso, cantidad]) => `${cantidad} ${nombreRecurso(recurso)}`)
+                        .join(' · ')}
+                      .
+                    </p>
+                  )}
                 </div>
+
+                <p className="text-xs leading-relaxed text-bruma/60">
+                  ¿Necesitas más cupo ya? La recarga de bolsa se hace después,
+                  desde el panel de tu cuenta.
+                </p>
               </div>
             )}
 
@@ -1033,14 +991,10 @@ export function PaginaCompra() {
                     ['Tu negocio', nombreEmpresa],
                     ['País', paisActual?.nombre ?? paisIso],
                     ['Rubro', rubros.find((r) => r.codigo === rubroCodigo)?.nombre ?? rubroCodigo],
-                    [
-                      'Equipo',
-                      equipoEtiqueta,
-                    ],
-                    [
-                      'Edición',
-                      EDICIONES.find((o) => o.codigo === edicion)?.nombre ?? edicion,
-                    ],
+                    ['Equipo', equipoEtiqueta],
+                    ['Plan', planNombre],
+                    ['Periodicidad', periodicidadActual?.nombre ?? periodicidad],
+                    ['Add-ons', addonsTxt],
                     ['Tu página', `agenda.anayadev.cl/${slug}`],
                     ['A cargo', `${adminNombre} · ${adminCorreo}`],
                   ].map(([clave, valor]) => (
@@ -1049,25 +1003,10 @@ export function PaginaCompra() {
                       <dd className="text-right text-blanco">{valor}</dd>
                     </div>
                   ))}
-                  <div className="border-t border-blanco/8 pt-2.5">
-                    <dt className="text-bruma/70">Módulos incluidos</dt>
-                    <dd className="mt-1.5 flex flex-wrap gap-1.5 text-right">
-                      {nombresContratados.length === 0
-                        ? '—'
-                        : nombresContratados.map((nombre) => (
-                            <span
-                              key={nombre}
-                              className="rounded-md border border-cian/25 bg-cian/5 px-2 py-0.5 text-[11px] font-medium text-cian"
-                            >
-                              {nombre}
-                            </span>
-                          ))}
-                    </dd>
-                  </div>
                   <div className="flex justify-between gap-4 border-t border-blanco/8 pt-2.5">
                     <dt className="text-bruma/70">Total mensual</dt>
                     <dd className="text-right font-semibold text-blanco">
-                      {totalFormateado}
+                      {simulacion ? formatearMonto(paisActual, simulacion.total) : '—'}
                     </dd>
                   </div>
                 </dl>

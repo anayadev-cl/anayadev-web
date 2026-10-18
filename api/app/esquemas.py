@@ -163,6 +163,16 @@ class NecesidadCheckoutGuardar(BaseModel):
     orden: int = 0
 
 
+class PlanSimularPeticion(BaseModel):
+    """Selección del motor de planes (proxy a Calenzia /publico/planes/simular)."""
+
+    plan_codigo: str | None = Field(default=None, max_length=20)
+    addons: list[str] = Field(default_factory=list)
+    nro_trabajadores: int = Field(ge=1, le=5000)
+    periodicidad_codigo: str = Field(default="mensual", max_length=20)
+    pais_iso: str = Field(default="CL", min_length=2, max_length=2)
+
+
 class CompraPeticion(BaseModel):
     slug: str
     nombre_empresa: str
@@ -179,6 +189,12 @@ class CompraPeticion(BaseModel):
     edicion: str = "comunicacion"
     nro_trabajadores: int | None = Field(default=None, ge=1, le=5000)
     respuestas: dict[str, Any] = Field(default_factory=dict)
+    # --- Selección del motor de planes (checkout nuevo, aditivo) ---
+    # Si el cliente envía alguna de estas claves, se usa el modelo de planes
+    # (precio por motor); si no, se conserva el flujo legacy edicion+módulos.
+    plan_codigo: str | None = Field(default=None, max_length=20)
+    periodicidad_codigo: str = Field(default="mensual", max_length=20)
+    addons: list[str] = Field(default_factory=list)
 
 
 class CompraRespuesta(BaseModel):

@@ -66,6 +66,54 @@ def obtener_modulos(url_base: str) -> list[dict] | None:
         return None
 
 
+def _post_json(url: str, datos: dict, timeout: float = 6.0) -> tuple[int, str]:
+    """POST JSON contra Calenzia (usa urllib, como el resto del módulo)."""
+    peticion = urllib.request.Request(
+        url,
+        data=json.dumps(datos).encode("utf-8"),
+        headers={"Accept": "application/json", "Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(peticion, timeout=timeout) as respuesta:
+        return respuesta.status, respuesta.read().decode("utf-8")
+
+
+def obtener_catalogo_planes(url_base: str, pais_iso: str = "CL") -> dict | None:
+    """Catálogo del motor de planes de Calenzia (`/publico/planes/catalogo`).
+
+    Devuelve el dict tal cual (planes, tramos, periodicidades y funciones) o
+    None si falla. El front no calcula precios: todo sale de acá y de `simular`.
+    """
+    try:
+        _, cuerpo = _pedir(
+            f"{url_base.rstrip('/')}/api/v1/publico/planes/catalogo"
+            f"?pais_iso={pais_iso}"
+        )
+        datos = json.loads(cuerpo)
+        return datos if isinstance(datos, dict) else None
+    except Exception:
+        log.exception("No se pudo obtener el catálogo de planes de Calenzia")
+        return None
+
+
+def simular_plan(url_base: str, payload: dict) -> dict | None:
+    """Corre el motor de planes de Calenzia (`/publico/planes/simular`).
+
+    `payload` debe ser EXACTAMENTE la selección que se manda al webhook
+    (plan_codigo, addons, periodicidad_codigo, nro_trabajadores, pais_iso):
+    lo mostrado = lo cobrado = lo aprovisionado. Devuelve el dict o None.
+    """
+    try:
+        _, cuerpo = _post_json(
+            f"{url_base.rstrip('/')}/api/v1/publico/planes/simular", payload
+        )
+        datos = json.loads(cuerpo)
+        return datos if isinstance(datos, dict) else None
+    except Exception:
+        log.exception("No se pudo simular el plan en Calenzia")
+        return None
+
+
 def slug_disponible(url_base: str, slug: str) -> bool | None:
     """True si el slug está libre, False si está ocupado, None si no se sabe.
 
