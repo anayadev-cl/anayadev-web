@@ -703,18 +703,6 @@ def crear_compra(cuerpo: CompraPeticion, sesion: Session = Depends(get_sesion)):
         raise HTTPException(422, "El país seleccionado no existe")
 
     id_fiscal = (cuerpo.id_fiscal or "").strip() or None
-    if pais_datos.get("id_fiscal_obligatorio") and not id_fiscal:
-        raise HTTPException(
-            422,
-            f"El {pais_datos.get('etiqueta_id_fiscal', 'identificador fiscal')} es obligatorio",
-        )
-
-    # El checkout manda el número exacto de trabajadores que escribió el
-    # dueño. El fallback a 1 solo cubre clientes viejos del formulario de
-    # rangos, que no mandaban el número.
-    nro_trabajadores = (
-        cuerpo.nro_trabajadores if cuerpo.nro_trabajadores is not None else 1
-    )
 
     # --- Modelo de PLANES (checkout nuevo, aditivo) ---
     # El front manda SIEMPRE plan_codigo/periodicidad_codigo/addons (aunque
@@ -727,6 +715,23 @@ def crear_compra(cuerpo: CompraPeticion, sesion: Session = Depends(get_sesion)):
         or "periodicidad_codigo" in cuerpo.model_fields_set
         or "addons" in cuerpo.model_fields_set
     )
+
+    # Fiscales DIFERIDOS en el checkout de planes: el identificador se puede
+    # completar al activar/facturar, así que no se exige por país en esta rama.
+    # El flujo legacy conserva la regla de `id_fiscal_obligatorio`.
+    if not usa_plan and pais_datos.get("id_fiscal_obligatorio") and not id_fiscal:
+        raise HTTPException(
+            422,
+            f"El {pais_datos.get('etiqueta_id_fiscal', 'identificador fiscal')} es obligatorio",
+        )
+
+    # El checkout manda el número exacto de trabajadores que escribió el
+    # dueño. El fallback a 1 solo cubre clientes viejos del formulario de
+    # rangos, que no mandaban el número.
+    nro_trabajadores = (
+        cuerpo.nro_trabajadores if cuerpo.nro_trabajadores is not None else 1
+    )
+
     if usa_plan:
         plan_codigo = (cuerpo.plan_codigo or "").strip().lower() or None
         periodicidad_codigo = (

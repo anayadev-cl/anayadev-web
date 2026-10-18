@@ -19,12 +19,16 @@ import {
   validarTelefono,
 } from '../lib/validaciones'
 
-const PASOS = ['Tu negocio', 'Tu plan', 'Tu equipo', 'Enviar']
+const PASOS = ['Tu plan', 'Tu negocio', 'Tu cuenta']
 
 const entrada =
   'w-full rounded-xl border border-blanco/12 bg-abisal/80 px-4 py-3 text-sm text-blanco outline-none transition-colors placeholder:text-bruma/40 focus:border-cian/50 focus:ring-1 focus:ring-cian/30'
 
 const MAX_TRABAJADORES = 5000
+const PAIS_FIJO = 'CL'
+
+const TEXTO_PERSONALIZADO =
+  'Todo lo de abajo ya viene incluido. Suma solo lo que necesites y verás el total al instante.'
 
 function numeroTrabajadoresValido(texto: string): number | null {
   const valor = texto.trim()
@@ -49,13 +53,6 @@ function tramoPara(
         (t.max_trabajadores === null || nroTrabajadores <= t.max_trabajadores),
     ) ?? ordenados[0]
   )
-}
-
-function nombreRecurso(recurso: string): string {
-  if (recurso === 'conversaciones') return 'conversaciones del bot'
-  if (recurso === 'recordatorios') return 'recordatorios por WhatsApp'
-  if (recurso === 'gemas') return 'gemas de IA'
-  return recurso
 }
 
 function leerHandoff(): {
@@ -86,7 +83,6 @@ export function PaginaCompra() {
   const [rubros, setRubros] = useState<{ codigo: string; nombre: string }[]>([])
   const [paises, setPaises] = useState<Pais[]>([])
   const [planes, setPlanes] = useState<PlanCatalogoPublico | null>(null)
-  const [paisIso, setPaisIso] = useState('CL')
   const [cargando, setCargando] = useState(true)
   const [paso, setPaso] = useState(0)
 
@@ -94,22 +90,21 @@ export function PaginaCompra() {
   const [slug, setSlug] = useState('')
   const [slugManual, setSlugManual] = useState(false)
   const [estadoSlug, setEstadoSlug] = useState<'comprobando' | 'libre' | 'ocupado' | null>(null)
-  const [tipoEntidad, setTipoEntidad] = useState('empresa')
   const [rubroCodigo, setRubroCodigo] = useState('')
   const [nroTrabajadores, setNroTrabajadores] = useState(handoff.trabajadores ?? '1')
 
   const [adminNombre, setAdminNombre] = useState('')
   const [adminCorreo, setAdminCorreo] = useState('')
   const [adminTelefono, setAdminTelefono] = useState('')
+  const [mostrarFiscal, setMostrarFiscal] = useState(false)
   const [idFiscal, setIdFiscal] = useState('')
 
-  // Selección del plan. `planSeleccion`: código de preset o 'personalizado'.
   const [planSeleccion, setPlanSeleccion] = useState<string | null>(
     handoff.plan && handoff.plan !== 'null' ? handoff.plan : null,
   )
   const [periodicidad, setPeriodicidad] = useState(handoff.periodicidad ?? 'mensual')
   const [addons, setAddons] = useState<string[]>(handoff.addons)
-  const [simulacion, setSimulacion] = useState<PlanSimular | null>(null)
+  const [simulaciones, setSimulaciones] = useState<Record<string, PlanSimular | null>>({})
   const [simulando, setSimulando] = useState(false)
 
   const [enviando, setEnviando] = useState(false)
@@ -131,7 +126,7 @@ export function PaginaCompra() {
   useEffect(() => {
     let activo = true
     api
-      .planesCatalogo(paisIso)
+      .planesCatalogo(PAIS_FIJO)
       .then((datos) => {
         if (activo) setPlanes(datos)
       })
@@ -141,10 +136,9 @@ export function PaginaCompra() {
     return () => {
       activo = false
     }
-  }, [paisIso])
+  }, [])
 
-  // Valida el handoff cuando llega el catálogo: descarta plan/periodicidad/
-  // add-ons que no existan para que la simulación y el envío coincidan.
+  // Valida el handoff contra el catálogo real.
   useEffect(() => {
     if (!planes) return
     const addonsValidos = new Set(
@@ -163,12 +157,13 @@ export function PaginaCompra() {
     setAddons((prev) => prev.filter((a) => addonsValidos.has(a)))
   }, [planes])
 
-  const paisActual = paises.find((p) => p.iso === paisIso) ?? null
+  const paisActual = paises.find((p) => p.iso === PAIS_FIJO) ?? null
   const trabajadoresValidos = numeroTrabajadoresValido(nroTrabajadores)
   const equipoEtiqueta = trabajadoresValidos === null ? '—' : etiquetaEquipo(trabajadoresValidos)
 
-  // La MISMA tupla se usa para simular y para enviar al webhook:
-  // lo mostrado = lo cobrado = lo aprovisionado.
+  const periodicidadActual = planes?.periodicidades.find((p) => p.codigo === periodicidad)
+
+  // La MISMA tupla se usa para simular y para enviar al webhook.
   function seleccion(): PlanSimularRequest {
     const planCodigo = planSeleccion === 'personalizado' ? null : planSeleccion
     return {
@@ -176,31 +171,45 @@ export function PaginaCompra() {
       addons: planSeleccion === 'personalizado' ? [...addons].sort() : [],
       nro_trabajadores: trabajadoresValidos ?? 1,
       periodicidad_codigo: periodicidad,
-      pais_iso: paisIso,
+      pais_iso: PAIS_FIJO,
     }
   }
 
+  // Simula Básico y Premium (precios/totales del servidor) al cambiar
+  // personas o periodicidad.
   useEffect(() => {
-    if (planSeleccion === null || trabajadoresValidos === null) {
-      setSimulacion(null)
+    if (trabajadoresValidos === null) {
+      setSimulaciones({})
+      setSimulando(false)
       return
     }
     let activo = true
     setSimulando(true)
     const temporizador = setTimeout(() => {
-      api
-        .simularPlan(seleccion())
-        .then((datos) => {
+      Promise.all([
+        api.simularPlan({
+          plan_codigo: 'basico',
+          addons: [],
+          nro_trabajadores: trabajadoresValidos,
+          periodicidad_codigo: periodicidad,
+          pais_iso: PAIS_FIJO,
+        }),
+        api.simularPlan({
+          plan_codigo: 'premium',
+          addons: [],
+          nro_trabajadores: trabajadoresValidos,
+          periodicidad_codigo: periodicidad,
+          pais_iso: PAIS_FIJO,
+        }),
+      ])
+        .then(([basico, premium]) => {
           if (activo) {
-            setSimulacion(datos)
+            setSimulaciones((prev) => ({ ...prev, basico, premium }))
             setError('')
           }
         })
         .catch(() => {
-          if (activo) {
-            setSimulacion(null)
-            setError('No pudimos calcular el plan. Revisa la conexión e intenta de nuevo.')
-          }
+          if (activo) setError('No pudimos calcular los planes. Revisa la conexión.')
         })
         .finally(() => {
           if (activo) setSimulando(false)
@@ -210,7 +219,33 @@ export function PaginaCompra() {
       activo = false
       clearTimeout(temporizador)
     }
-  }, [planSeleccion, addons, periodicidad, nroTrabajadores, paisIso])
+  }, [nroTrabajadores, periodicidad, trabajadoresValidos])
+
+  // Simula Personalizado (base + add-ons elegidos).
+  useEffect(() => {
+    if (trabajadoresValidos === null) return
+    let activo = true
+    const temporizador = setTimeout(() => {
+      api
+        .simularPlan({
+          plan_codigo: null,
+          addons: [...addons].sort(),
+          nro_trabajadores: trabajadoresValidos,
+          periodicidad_codigo: periodicidad,
+          pais_iso: PAIS_FIJO,
+        })
+        .then((personalizado) => {
+          if (activo) setSimulaciones((prev) => ({ ...prev, personalizado }))
+        })
+        .catch(() => {
+          if (activo) setSimulaciones((prev) => ({ ...prev, personalizado: null }))
+        })
+    }, 250)
+    return () => {
+      activo = false
+      clearTimeout(temporizador)
+    }
+  }, [nroTrabajadores, periodicidad, addons, trabajadoresValidos])
 
   useEffect(() => {
     if (!slug || !slugValido()) {
@@ -232,18 +267,17 @@ export function PaginaCompra() {
   }, [paso])
 
   const tramoActual =
-    simulacion?.tramo_codigo ??
+    simulaciones.basico?.tramo_codigo ??
     (planes && trabajadoresValidos !== null
       ? tramoPara(trabajadoresValidos, planes.tramos)?.codigo
       : undefined)
 
-  const periodicidadActual = planes?.periodicidades.find((p) => p.codigo === periodicidad)
-
-  function precioPreset(codigo: string): number | null {
-    const plan = planes?.planes.find((p) => p.codigo === codigo)
-    const precio = plan?.precios.find((x) => x.tramo_codigo === tramoActual)
-    return precio ? precio.precio_persona : null
-  }
+  const simulacionActual =
+    (planSeleccion === 'personalizado'
+      ? simulaciones.personalizado
+      : planSeleccion
+        ? simulaciones[planSeleccion]
+        : null) ?? null
 
   function precioAddon(codigo: string): number | null {
     const funcion = planes?.funciones.find((f) => f.codigo === codigo)
@@ -275,29 +309,29 @@ export function PaginaCompra() {
   function puedeAvanzar(): boolean {
     if (paso === 0) {
       return (
-        nombreEmpresa.trim().length > 0 &&
-        slugValido() &&
-        estadoSlug !== 'ocupado' &&
-        rubroCodigo.length > 0 &&
-        trabajadoresValidos !== null
+        planSeleccion !== null &&
+        trabajadoresValidos !== null &&
+        simulacionActual !== null
       )
     }
     if (paso === 1) {
-      return planSeleccion !== null && trabajadoresValidos !== null && simulacion !== null
+      return (
+        nombreEmpresa.trim().length > 0 &&
+        slugValido() &&
+        estadoSlug !== 'ocupado' &&
+        rubroCodigo.length > 0
+      )
     }
     if (paso === 2) {
       const correoValido = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(adminCorreo.trim())
-      const fiscalOk =
-        !paisActual?.id_fiscal_obligatorio || idFiscal.trim().length > 0
       const rutOk =
-        paisActual?.iso !== 'CL' || idFiscal.trim() === '' || validarRut(idFiscal)
+        !mostrarFiscal || idFiscal.trim() === '' || validarRut(idFiscal)
       const telefonoOk =
         adminTelefono.trim() === '' ||
-        validarTelefono(adminTelefono, paisActual?.iso ?? paisIso)
+        validarTelefono(adminTelefono, PAIS_FIJO)
       return (
         adminNombre.trim().length > 0 &&
         correoValido &&
-        fiscalOk &&
         rutOk &&
         telefonoOk
       )
@@ -310,7 +344,7 @@ export function PaginaCompra() {
     setEnviando(true)
     try {
       const trabajadores = trabajadoresValidos
-      if (trabajadores === null || planSeleccion === null || simulacion === null) {
+      if (trabajadores === null || planSeleccion === null || simulacionActual === null) {
         throw new Error('Completa tu plan antes de enviar.')
       }
       const sel = seleccion()
@@ -318,20 +352,19 @@ export function PaginaCompra() {
       const compra = await api.crearCompra({
         slug,
         nombre_empresa: nombreEmpresa,
-        tipo_entidad: tipoEntidad,
+        tipo_entidad: 'empresa',
         rubro_codigo: rubroCodigo,
-        pais: paisIso,
+        pais: PAIS_FIJO,
         equipo_personas: etiquetaEquipo(trabajadores),
         admin_nombre: adminNombre,
         admin_correo: adminCorreo,
         admin_telefono: adminTelefono || null,
-        id_fiscal: idFiscal || null,
+        id_fiscal: mostrarFiscal && idFiscal.trim() ? idFiscal : null,
         necesidades: [],
         modulos_extra: [],
         edicion,
         nro_trabajadores: trabajadores,
         respuestas: { responde_fuera_de_horario: edicion === 'con_ia' },
-        // Invariante: misma selección que se cotizó con /simular.
         plan_codigo: sel.plan_codigo,
         periodicidad_codigo: sel.periodicidad_codigo,
         addons: sel.addons,
@@ -420,6 +453,8 @@ export function PaginaCompra() {
     (planSeleccion === 'personalizado' ? addons : [])
       .map((codigo) => planes?.funciones.find((f) => f.codigo === codigo)?.nombre ?? codigo)
       .join(', ') || '—'
+  const funcionesBase = (planes?.funciones ?? []).filter((f) => f.tipo === 'base')
+  const funcionesAddon = (planes?.funciones ?? []).filter((f) => f.tipo === 'addon')
 
   return (
     <div className="relative min-h-screen">
@@ -448,8 +483,7 @@ export function PaginaCompra() {
             <span className="texto-gradiente">Calenzia</span> lista
           </h1>
           <p className="mt-3 text-sm leading-relaxed text-bruma">
-            Elige tu plan y déjanos tus datos. Por ahora Calenzia está disponible
-            en Chile.
+            Elige tu plan y déjanos tus datos. Por ahora Calenzia está disponible en Chile.
           </p>
         </div>
 
@@ -507,165 +541,37 @@ export function PaginaCompra() {
         ) : (
           <div className="tarjeta-vidrio mt-8 rounded-3xl p-6 sm:p-8">
             {paso === 0 && (
-              <div className="space-y-7">
-                <div className="space-y-5">
-                  <label className="block">
-                    <span className="mb-1.5 block text-lg font-semibold text-blanco">
-                      ¿En qué país está tu negocio?
-                    </span>
-                    <select
-                      className={entrada}
-                      value={paisIso}
-                      onChange={(e) => setPaisIso(e.target.value)}
-                    >
-                      {paises.map((pais) => (
-                        <option key={pais.iso} value={pais.iso}>
-                          {pais.nombre}
-                        </option>
-                      ))}
-                    </select>
-                    <span className="mt-1.5 block text-xs text-bruma/60">
-                      Los precios y el formato se adaptan al país que elijas.
-                    </span>
-                  </label>
+              <div className="space-y-6">
+                <div>
+                  <h2 className="text-lg font-semibold text-blanco">Elige tu plan</h2>
+                  <p className="mt-1 text-sm text-bruma">
+                    Primero dinos cuántas personas atienden: eso fija el tramo y el
+                    total de cada plan.
+                  </p>
+                </div>
 
-                  <label className="block">
-                    <span className="mb-1.5 block text-lg font-semibold text-blanco">
-                      ¿Cómo se llama tu negocio?
-                    </span>
-                    <input
-                      className={entrada}
-                      placeholder="Ej. Clínica del Sol"
-                      value={nombreEmpresa}
-                      onChange={(e) => {
-                        setNombreEmpresa(e.target.value)
-                        if (!slugManual) generarSlug(e.target.value)
-                      }}
-                    />
-                  </label>
-
-                  <label className="block">
-                    <span className="mb-1.5 block text-lg font-semibold text-blanco">
-                      ¿A qué se dedica?
-                    </span>
-                    <select
-                      className={entrada}
-                      value={rubroCodigo}
-                      onChange={(e) => setRubroCodigo(e.target.value)}
-                    >
-                      {rubros.map((rubro) => (
-                        <option key={rubro.codigo} value={rubro.codigo}>
-                          {rubro.nombre}
-                        </option>
-                      ))}
-                    </select>
-                    <span className="mt-1.5 block text-xs text-bruma/60">
-                      Con esto preparamos tu Calenzia para tu rubro.
-                    </span>
-                  </label>
-
-                  <label className="block">
-                    <span className="mb-1.5 block text-lg font-semibold text-blanco">
-                      ¿Para cuántas personas es?
-                    </span>
+                <label className="block">
+                  <span className="mb-1.5 block text-base font-semibold text-blanco">
+                    ¿Cuántas personas atienden?
+                  </span>
+                  <div className="flex items-center gap-3">
                     <input
                       type="number"
                       min={1}
                       max={MAX_TRABAJADORES}
                       inputMode="numeric"
-                      className={entrada}
+                      className={`${entrada} max-w-40 text-lg`}
                       placeholder="1"
                       value={nroTrabajadores}
                       onChange={(e) => setNroTrabajadores(e.target.value)}
                     />
-                    {trabajadoresValidos === null ? (
-                      <span className="mt-1.5 block text-xs text-red-300">
-                        Escribe un número entero de personas (mínimo 1).
-                      </span>
-                    ) : (
-                      <span className="mt-1.5 block text-xs text-bruma/60">
-                        Este número define el tramo de precio. Después puedes
-                        sumar o quitar trabajadores y tu plan se ajusta solo.
-                      </span>
-                    )}
-                  </label>
-
-                  <label className="block">
-                    <span className="mb-1.5 block text-lg font-semibold text-blanco">
-                      ¿Cómo quieres que te encuentren tus clientes?
+                    <span className="text-sm text-bruma/70">
+                      {trabajadoresValidos === null
+                        ? 'Escribe un número entero (mínimo 1).'
+                        : `Tramo: ${tramoActual ?? '—'}`}
                     </span>
-                    <div className="flex items-center gap-2">
-                      <span className="shrink-0 text-sm text-bruma/60">agenda.anayadev.cl/</span>
-                      <input
-                        className={entrada}
-                        placeholder="clinica-del-sol"
-                        value={slug}
-                        onChange={(e) => {
-                          setSlugManual(true)
-                          setSlug(e.target.value.toLowerCase().replace(/\s+/g, '-'))
-                        }}
-                      />
-                    </div>
-                    {slug && slugValido() && (
-                      <span
-                        className={`mt-1.5 block text-xs ${
-                          estadoSlug === 'libre'
-                            ? 'text-turquesa'
-                            : estadoSlug === 'ocupado'
-                              ? 'text-red-300'
-                              : 'text-bruma/60'
-                        }`}
-                      >
-                        {estadoSlug === 'comprobando' && 'Revisando disponibilidad…'}
-                        {estadoSlug === 'libre' && 'Ese nombre está libre ✓'}
-                        {estadoSlug === 'ocupado' && 'Ese nombre ya está en uso. Prueba con otro parecido.'}
-                        {estadoSlug === null && 'El enlace donde tus clientes agendarán contigo.'}
-                      </span>
-                    )}
-                    {slug && !slugValido() && (
-                      <span className="mt-1.5 block text-xs text-red-300">
-                        Solo letras minúsculas, números y guiones intermedios.
-                      </span>
-                    )}
-                  </label>
-
-                  <label className="block">
-                    <span className="mb-1.5 block text-lg font-semibold text-blanco">
-                      ¿Eres una empresa o trabajas de forma independiente?
-                    </span>
-                    <div className="grid grid-cols-2 gap-2.5">
-                      {[
-                        { valor: 'empresa', etiqueta: 'Tengo una empresa' },
-                        { valor: 'persona_natural', etiqueta: 'Trabajo por mi cuenta' },
-                      ].map((opcion) => (
-                        <button
-                          key={opcion.valor}
-                          type="button"
-                          onClick={() => setTipoEntidad(opcion.valor)}
-                          className={`rounded-2xl border px-3 py-3 text-sm font-semibold transition-all ${
-                            tipoEntidad === opcion.valor
-                              ? 'border-cian/60 bg-cian/10 text-cian'
-                              : 'border-blanco/10 bg-abisal/60 text-bruma hover:border-blanco/25'
-                          }`}
-                        >
-                          {opcion.etiqueta}
-                        </button>
-                      ))}
-                    </div>
-                  </label>
-                </div>
-              </div>
-            )}
-
-            {paso === 1 && (
-              <div className="space-y-6">
-                <div>
-                  <h2 className="text-lg font-semibold text-blanco">Elige tu plan</h2>
-                  <p className="mt-1 text-sm text-bruma">
-                    Precios por persona según tu equipo. El tramo y el total los
-                    calcula Calenzia: acá solo ves lo que el motor devuelve.
-                  </p>
-                </div>
+                  </div>
+                </label>
 
                 <div>
                   <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-bruma/70">
@@ -692,108 +598,142 @@ export function PaginaCompra() {
                       </button>
                     ))}
                   </div>
+                  <p className="mt-1.5 text-xs text-bruma/60">
+                    El descuento aplica al precio mensual; Calenzia cobra mes a mes.
+                  </p>
                 </div>
 
-                <div>
-                  <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-bruma/70">
-                    Plan
-                  </span>
-                  <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-                    {(planes?.planes ?? []).map((plan) => {
-                      const precio = precioPreset(plan.codigo)
-                      const activo = planSeleccion === plan.codigo
-                      return (
-                        <button
-                          key={plan.codigo}
-                          type="button"
-                          onClick={() => setPlanSeleccion(plan.codigo)}
-                          className={`rounded-2xl border p-4 text-left transition-all ${
-                            activo
-                              ? 'border-cian/60 bg-cian/10 shadow-[0_0_26px_-14px_rgba(0,223,240,0.6)]'
-                              : 'border-blanco/10 bg-abisal/60 hover:border-blanco/25'
-                          }`}
-                        >
-                          <span className="flex items-center justify-between gap-2">
-                            <span className="text-sm font-semibold text-blanco">
-                              {plan.nombre}
-                            </span>
-                            <span
-                              className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[11px] font-bold ${
-                                activo
-                                  ? 'border-turquesa bg-turquesa/20 text-turquesa'
-                                  : 'border-blanco/25 text-transparent'
-                              }`}
-                            >
-                              ✓
-                            </span>
+                <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                  {(planes?.planes ?? []).map((plan) => {
+                    const sim = simulaciones[plan.codigo]
+                    const activo = planSeleccion === plan.codigo
+                    return (
+                      <button
+                        key={plan.codigo}
+                        type="button"
+                        onClick={() => setPlanSeleccion(plan.codigo)}
+                        className={`rounded-2xl border p-4 text-left transition-all ${
+                          activo
+                            ? 'border-cian/60 bg-cian/10 shadow-[0_0_26px_-14px_rgba(0,223,240,0.6)]'
+                            : 'border-blanco/10 bg-abisal/60 hover:border-blanco/25'
+                        }`}
+                      >
+                        <span className="flex items-center justify-between gap-2">
+                          <span className="text-sm font-semibold text-blanco">
+                            {plan.nombre}
                           </span>
-                          {plan.descripcion && (
-                            <span className="mt-1 block text-xs leading-relaxed text-bruma">
-                              {plan.descripcion}
-                            </span>
-                          )}
-                          <span className="mt-1.5 block text-xs font-semibold text-cian">
-                            {precio === null
-                              ? '—'
-                              : `${formatearMonto(paisActual, precio)} / persona / mes`}
+                          <span
+                            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[11px] font-bold ${
+                              activo
+                                ? 'border-turquesa bg-turquesa/20 text-turquesa'
+                                : 'border-blanco/25 text-transparent'
+                            }`}
+                          >
+                            ✓
                           </span>
-                        </button>
-                      )
-                    })}
-                    <button
-                      type="button"
-                      onClick={() => setPlanSeleccion('personalizado')}
-                      className={`rounded-2xl border p-4 text-left transition-all ${
-                        planSeleccion === 'personalizado'
-                          ? 'border-cian/60 bg-cian/10 shadow-[0_0_26px_-14px_rgba(0,223,240,0.6)]'
-                          : 'border-blanco/10 bg-abisal/60 hover:border-blanco/25'
-                      }`}
-                    >
-                      <span className="flex items-center justify-between gap-2">
-                        <span className="text-sm font-semibold text-blanco">
-                          Personalizado
                         </span>
-                        <span
-                          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[11px] font-bold ${
-                            planSeleccion === 'personalizado'
-                              ? 'border-turquesa bg-turquesa/20 text-turquesa'
-                              : 'border-blanco/25 text-transparent'
-                          }`}
-                        >
-                          ✓
+                        {plan.descripcion && (
+                          <span className="mt-1 block text-xs leading-relaxed text-bruma">
+                            {plan.descripcion}
+                          </span>
+                        )}
+                        <span className="mt-2 block text-xs font-semibold text-cian">
+                          {sim
+                            ? `${formatearMonto(paisActual, sim.precio_persona)} / persona / mes`
+                            : 'Calculando…'}
                         </span>
+                        <span className="mt-0.5 block text-sm font-bold text-blanco">
+                          {sim
+                            ? `Total ${formatearMonto(paisActual, sim.total)} / mes`
+                            : '—'}
+                        </span>
+                        {sim && (
+                          <span className="mt-1 block text-[11px] text-bruma/60">
+                            {formatearMonto(paisActual, sim.precio_persona)} ×{' '}
+                            {sim.nro_trabajadores} ={' '}
+                            {formatearMonto(paisActual, sim.total)} / mes
+                          </span>
+                        )}
+                      </button>
+                    )
+                  })}
+                  <button
+                    type="button"
+                    onClick={() => setPlanSeleccion('personalizado')}
+                    className={`rounded-2xl border p-4 text-left transition-all ${
+                      planSeleccion === 'personalizado'
+                        ? 'border-cian/60 bg-cian/10 shadow-[0_0_26px_-14px_rgba(0,223,240,0.6)]'
+                        : 'border-blanco/10 bg-abisal/60 hover:border-blanco/25'
+                    }`}
+                  >
+                    <span className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-semibold text-blanco">Personalizado</span>
+                      <span
+                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[11px] font-bold ${
+                          planSeleccion === 'personalizado'
+                            ? 'border-turquesa bg-turquesa/20 text-turquesa'
+                            : 'border-blanco/25 text-transparent'
+                        }`}
+                      >
+                        ✓
                       </span>
-                      <span className="mt-1 block text-xs leading-relaxed text-bruma">
-                        Base Básico + los add-ons que elijas abajo.
-                      </span>
-                    </button>
-                  </div>
+                    </span>
+                    <span className="mt-1 block text-xs leading-relaxed text-bruma">
+                      Base Básico + los add-ons que elijas.
+                    </span>
+                    <span className="mt-2 block text-sm font-bold text-blanco">
+                      {simulaciones.personalizado
+                        ? `Total ${formatearMonto(paisActual, simulaciones.personalizado.total)} / mes`
+                        : 'Calculando…'}
+                    </span>
+                  </button>
                 </div>
 
                 {planSeleccion === 'personalizado' && (
-                  <div>
-                    <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-bruma/70">
-                      Add-ons
-                    </span>
-                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                      {(planes?.funciones ?? [])
-                        .filter((f) => f.tipo === 'addon')
-                        .map((funcion) => {
-                          const activo = addons.includes(funcion.codigo)
-                          const precio = precioAddon(funcion.codigo)
+                  <div className="space-y-4">
+                    <p className="rounded-xl border border-cian/25 bg-cian/5 px-4 py-3 text-sm leading-relaxed text-bruma">
+                      {TEXTO_PERSONALIZADO}
+                    </p>
+
+                    <div>
+                      <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-bruma/70">
+                        Ya incluido en la base
+                      </span>
+                      <ul className="space-y-1.5">
+                        {funcionesBase.map((f) => (
+                          <li key={f.codigo} className="text-sm">
+                            <span className="font-semibold text-blanco">{f.nombre}</span>
+                            {f.descripcion && (
+                              <span className="block text-xs text-bruma/70">
+                                {f.descripcion}
+                              </span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    <div>
+                      <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-bruma/70">
+                        Suma lo que necesites
+                      </span>
+                      <div className="grid grid-cols-1 gap-2">
+                        {funcionesAddon.map((f) => {
+                          const activo = addons.includes(f.codigo)
+                          const precio = precioAddon(f.codigo)
                           return (
                             <button
-                              key={funcion.codigo}
+                              key={f.codigo}
                               type="button"
-                              onClick={() => alternarAddon(funcion.codigo)}
-                              className={`flex items-center gap-3 rounded-xl border px-3.5 py-2.5 text-left transition-all ${
+                              onClick={() => alternarAddon(f.codigo)}
+                              className={`flex items-start gap-3 rounded-xl border px-3.5 py-3 text-left transition-all ${
                                 activo
                                   ? 'border-cian/50 bg-cian/5'
                                   : 'border-blanco/10 bg-abisal/60 hover:border-blanco/25'
                               }`}
                             >
                               <span
-                                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border text-[11px] font-bold ${
+                                className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border text-[11px] font-bold ${
                                   activo
                                     ? 'border-turquesa bg-turquesa/20 text-turquesa'
                                     : 'border-blanco/25 text-transparent'
@@ -802,18 +742,26 @@ export function PaginaCompra() {
                                 ✓
                               </span>
                               <span className="flex-1">
-                                <span className="block text-sm font-semibold text-blanco">
-                                  {funcion.nombre}
+                                <span className="flex items-baseline justify-between gap-2">
+                                  <span className="text-sm font-semibold text-blanco">
+                                    {f.nombre}
+                                  </span>
+                                  {precio !== null && (
+                                    <span className="shrink-0 text-xs font-semibold text-cian">
+                                      {formatearMonto(paisActual, precio)} / persona
+                                    </span>
+                                  )}
                                 </span>
-                                <span className="block text-xs text-bruma/70">
-                                  {precio === null
-                                    ? '—'
-                                    : `${formatearMonto(paisActual, precio)} / persona / mes`}
-                                </span>
+                                {f.descripcion && (
+                                  <span className="mt-0.5 block text-xs leading-relaxed text-bruma/70">
+                                    {f.descripcion}
+                                  </span>
+                                )}
                               </span>
                             </button>
                           )
                         })}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -826,61 +774,121 @@ export function PaginaCompra() {
                       </span>
                       <span className="block text-xs text-bruma/60">
                         para {equipoEtiqueta}
-                        {simulacion ? ` · tramo ${simulacion.tramo_codigo}` : ''}
-                        {simulacion && simulacion.descuento_pct !== 0
-                          ? ` · ${simulacion.descuento_pct}% por periodicidad`
+                        {simulacionActual
+                          ? ` · ${formatearMonto(paisActual, simulacionActual.precio_persona)} / persona`
+                          : ''}
+                        {simulacionActual && simulacionActual.descuento_pct !== 0
+                          ? ` · ${simulacionActual.descuento_pct}% por periodicidad`
                           : ''}
                       </span>
                     </div>
                     <span className="text-2xl font-bold texto-gradiente">
                       {simulando
                         ? '…'
-                        : simulacion
-                          ? formatearMonto(paisActual, simulacion.total)
+                        : simulacionActual
+                          ? `${formatearMonto(paisActual, simulacionActual.total)} / mes`
                           : '—'}
                     </span>
                   </div>
-                  {simulacion && simulacion.desglose.length > 0 && (
-                    <ul className="mt-3 space-y-1 border-t border-blanco/10 pt-3 text-xs text-bruma/80">
-                      {simulacion.desglose.map((linea) => (
-                        <li key={linea.concepto} className="flex justify-between gap-3">
-                          <span>{linea.descripcion}</span>
-                          <span>
-                            {formatearMonto(paisActual, linea.precio_persona)} / persona
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  {simulacion && simulacion.cupo && (
-                    <p className="mt-3 text-xs leading-relaxed text-bruma/60">
-                      Incluye{' '}
-                      {Object.entries(simulacion.cupo)
-                        .map(([recurso, cantidad]) => `${cantidad} ${nombreRecurso(recurso)}`)
-                        .join(' · ')}
-                      .
-                    </p>
-                  )}
+                  <p className="mt-2 text-xs text-bruma/60">
+                    Esto es lo que pagas al mes. El descuento por periodicidad ya está
+                    incluido en el precio mensual.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {paso === 1 && (
+              <div className="space-y-5">
+                <div>
+                  <h2 className="text-lg font-semibold text-blanco">Tu negocio</h2>
+                  <p className="mt-1 text-sm text-bruma">
+                    Con esto preparamos tu Calenzia. El país es Chile.
+                  </p>
                 </div>
 
-                <p className="text-xs leading-relaxed text-bruma/60">
-                  ¿Necesitas más cupo ya? La recarga de bolsa se hace después,
-                  desde el panel de tu cuenta.
-                </p>
+                <label className="block">
+                  <span className="mb-1.5 block text-base font-semibold text-blanco">
+                    ¿Cómo se llama tu negocio?
+                  </span>
+                  <input
+                    className={entrada}
+                    placeholder="Ej. Clínica del Sol"
+                    value={nombreEmpresa}
+                    onChange={(e) => {
+                      setNombreEmpresa(e.target.value)
+                      if (!slugManual) generarSlug(e.target.value)
+                    }}
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="mb-1.5 block text-base font-semibold text-blanco">
+                    ¿A qué se dedica?
+                  </span>
+                  <select
+                    className={entrada}
+                    value={rubroCodigo}
+                    onChange={(e) => setRubroCodigo(e.target.value)}
+                  >
+                    {rubros.map((rubro) => (
+                      <option key={rubro.codigo} value={rubro.codigo}>
+                        {rubro.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="block">
+                  <span className="mb-1.5 block text-base font-semibold text-blanco">
+                    Tu página
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="shrink-0 text-sm text-bruma/60">agenda.anayadev.cl/</span>
+                    <input
+                      className={entrada}
+                      placeholder="clinica-del-sol"
+                      value={slug}
+                      onChange={(e) => {
+                        setSlugManual(true)
+                        setSlug(e.target.value.toLowerCase().replace(/\s+/g, '-'))
+                      }}
+                    />
+                  </div>
+                  {slug && slugValido() && (
+                    <span
+                      className={`mt-1.5 block text-xs ${
+                        estadoSlug === 'libre'
+                          ? 'text-turquesa'
+                          : estadoSlug === 'ocupado'
+                            ? 'text-red-300'
+                            : 'text-bruma/60'
+                      }`}
+                    >
+                      {estadoSlug === 'comprobando' && 'Revisando disponibilidad…'}
+                      {estadoSlug === 'libre' && 'Ese nombre está libre ✓'}
+                      {estadoSlug === 'ocupado' && 'Ese nombre ya está en uso. Prueba con otro parecido.'}
+                      {estadoSlug === null && 'Lo sugerimos desde el nombre; puedes cambiarlo.'}
+                    </span>
+                  )}
+                  {slug && !slugValido() && (
+                    <span className="mt-1.5 block text-xs text-red-300">
+                      Solo letras minúsculas, números y guiones intermedios.
+                    </span>
+                  )}
+                </label>
               </div>
             )}
 
             {paso === 2 && (
-              <div className="space-y-6">
+              <div className="space-y-5">
                 <div>
-                  <h2 className="text-lg font-semibold text-blanco">
-                    ¿Quién estará a cargo de la cuenta?
-                  </h2>
+                  <h2 className="text-lg font-semibold text-blanco">Tu cuenta</h2>
                   <p className="mt-1 text-sm text-bruma">
-                    Es la persona que administrará la agenda y recibirá el
-                    acceso. Puedes ser tú mismo.
+                    La persona que administrará la agenda y recibirá el acceso.
                   </p>
                 </div>
+
                 <label className="block">
                   <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.14em] text-bruma/70">
                     Nombre completo
@@ -904,37 +912,7 @@ export function PaginaCompra() {
                     onChange={(e) => setAdminCorreo(e.target.value)}
                   />
                   <span className="mt-1.5 block text-xs text-bruma/60">
-                    Aquí te enviaremos el resumen de tu solicitud y tu acceso,
-                    nada de spam.
-                  </span>
-                </label>
-                <label className="block">
-                  <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.14em] text-bruma/70">
-                    {paisActual?.etiqueta_id_fiscal ?? 'Identificador fiscal'}
-                    {paisActual?.id_fiscal_obligatorio ? '' : ' (opcional)'}
-                  </span>
-                  <input
-                    className={entrada}
-                    placeholder={
-                      paisActual?.iso === 'CL'
-                        ? 'Ej. 12.345.678-5'
-                        : `Ej. tu ${paisActual?.etiqueta_id_fiscal ?? 'ID'}`
-                    }
-                    value={idFiscal}
-                    onChange={(e) => {
-                      const valor = e.target.value
-                      setIdFiscal(paisActual?.iso === 'CL' ? formatearRut(valor) : valor)
-                    }}
-                  />
-                  {paisActual?.iso === 'CL' &&
-                    idFiscal.trim() !== '' &&
-                    !validarRut(idFiscal) && (
-                      <span className="mt-1.5 block text-xs text-red-300">
-                        El RUT no es válido. Revisa los dígitos y el dígito verificador.
-                      </span>
-                    )}
-                  <span className="mt-1.5 block text-xs text-bruma/60">
-                    Lo usamos para la facturación de tu plan.
+                    Aquí te enviaremos el resumen y tu acceso, nada de spam.
                   </span>
                 </label>
                 <label className="block">
@@ -949,53 +927,69 @@ export function PaginaCompra() {
                     )}
                     <input
                       className={entrada}
-                      placeholder={
-                        paisActual?.iso === 'CL' ? '9 1234 5678' : '(555) 123-4567'
-                      }
+                      placeholder="9 1234 5678"
                       value={adminTelefono}
                       onChange={(e) =>
-                        setAdminTelefono(
-                          formatearTelefono(e.target.value, paisActual?.iso ?? paisIso),
-                        )
+                        setAdminTelefono(formatearTelefono(e.target.value, PAIS_FIJO))
                       }
                     />
                   </div>
                   {adminTelefono.trim() !== '' &&
-                    !validarTelefono(adminTelefono, paisActual?.iso ?? paisIso) && (
+                    !validarTelefono(adminTelefono, PAIS_FIJO) && (
                       <span className="mt-1.5 block text-xs text-red-300">
                         El teléfono debe tener{' '}
-                        {TELEFONO_DIGITOS_POR_PAIS[paisActual?.iso ?? ''] ??
-                          'entre 6 y 15'}{' '}
-                        dígitos (sin contar el prefijo del país).
+                        {TELEFONO_DIGITOS_POR_PAIS[PAIS_FIJO] ?? 'entre 6 y 15'} dígitos.
                       </span>
                     )}
                 </label>
-              </div>
-            )}
 
-            {paso === 3 && (
-              <div className="space-y-5">
-                <div>
-                  <h2 className="text-lg font-semibold text-blanco">
-                    Esto es lo que estás contratando
-                  </h2>
-                  <p className="mt-1 text-sm text-bruma">
-                    Si algo no calza, puedes volver atrás y ajustarlo. Nuestro
-                    equipo revisará el paquete y ajustará los límites a tu
-                    equipo antes de activar.
-                  </p>
+                <div className="rounded-2xl border border-blanco/10 bg-abisal/60">
+                  <button
+                    type="button"
+                    onClick={() => setMostrarFiscal((v) => !v)}
+                    className="flex w-full items-center justify-between px-4 py-3 text-left"
+                  >
+                    <span className="text-sm font-semibold text-blanco">
+                      Datos de facturación (opcional)
+                    </span>
+                    <span className="text-xs text-bruma/60">
+                      {mostrarFiscal ? 'Ocultar' : 'Agregar'}
+                    </span>
+                  </button>
+                  {mostrarFiscal && (
+                    <div className="space-y-2 border-t border-blanco/10 px-4 py-3">
+                      <label className="block">
+                        <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-bruma/70">
+                          RUT
+                        </span>
+                        <input
+                          className={entrada}
+                          placeholder="Ej. 12.345.678-5"
+                          value={idFiscal}
+                          onChange={(e) => setIdFiscal(formatearRut(e.target.value))}
+                        />
+                        {idFiscal.trim() !== '' && !validarRut(idFiscal) && (
+                          <span className="mt-1 block text-xs text-red-300">
+                            El RUT no es válido. Revisa los dígitos y el dígito verificador.
+                          </span>
+                        )}
+                      </label>
+                      <p className="text-xs leading-relaxed text-bruma/60">
+                        Puedes dejarlo para después: lo pedimos al activar tu cuenta.
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 <dl className="space-y-2.5 rounded-2xl bg-abisal/60 p-5 text-sm">
                   {[
-                    ['Tu negocio', nombreEmpresa],
-                    ['País', paisActual?.nombre ?? paisIso],
+                    ['Negocio', nombreEmpresa],
                     ['Rubro', rubros.find((r) => r.codigo === rubroCodigo)?.nombre ?? rubroCodigo],
-                    ['Equipo', equipoEtiqueta],
+                    ['Tu página', `agenda.anayadev.cl/${slug}`],
+                    ['Personas', equipoEtiqueta],
                     ['Plan', planNombre],
                     ['Periodicidad', periodicidadActual?.nombre ?? periodicidad],
                     ['Add-ons', addonsTxt],
-                    ['Tu página', `agenda.anayadev.cl/${slug}`],
                     ['A cargo', `${adminNombre} · ${adminCorreo}`],
                   ].map(([clave, valor]) => (
                     <div key={clave} className="flex justify-between gap-4">
@@ -1006,17 +1000,12 @@ export function PaginaCompra() {
                   <div className="flex justify-between gap-4 border-t border-blanco/8 pt-2.5">
                     <dt className="text-bruma/70">Total mensual</dt>
                     <dd className="text-right font-semibold text-blanco">
-                      {simulacion ? formatearMonto(paisActual, simulacion.total) : '—'}
+                      {simulacionActual
+                        ? `${formatearMonto(paisActual, simulacionActual.total)} / mes`
+                        : '—'}
                     </dd>
                   </div>
                 </dl>
-
-                <p className="rounded-xl border border-blanco/10 bg-abisal/60 px-4 py-3 text-xs leading-relaxed text-bruma">
-                  Al enviar, te mandamos un correo con todo lo que quedó
-                  registrado. Nuestro equipo confirma contigo el paquete
-                  final y coordina la activación y el pago. No pagas nada
-                  ahora.
-                </p>
               </div>
             )}
 
@@ -1029,7 +1018,7 @@ export function PaginaCompra() {
               >
                 ← Atrás
               </button>
-              {paso < 3 ? (
+              {paso < 2 ? (
                 <button
                   type="button"
                   disabled={!puedeAvanzar()}

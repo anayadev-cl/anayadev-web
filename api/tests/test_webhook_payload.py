@@ -79,6 +79,23 @@ def test_payload_premium_deriva_con_ia_si_falta_edicion() -> None:
     assert payload["edicion"] == "con_ia"
 
 
+def test_payload_sin_fiscales_y_tipo_entidad_default() -> None:
+    """Checkout liviano: sin tipo_entidad ni fiscales → empresa y pareja None."""
+    datos = _base(
+        edicion=None,
+        plan_codigo="basico",
+        periodicidad_codigo="mensual",
+        addons=[],
+    )
+    datos.pop("tipo_entidad")
+    payload = construir_payload(_compra(datos))
+    assert payload["negocio"]["tipo_entidad"] == "empresa"
+    assert payload["contacto"]["identificador_fiscal"] is None
+    assert payload["contacto"]["tipo_identificador"] is None
+    assert payload["plan_codigo"] == "basico"
+    assert payload["edicion"] == "comunicacion"
+
+
 def test_payload_legacy_sin_plan_mantiene_modulos() -> None:
     payload = construir_payload(
         _compra(

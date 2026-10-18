@@ -176,7 +176,8 @@ class PlanSimularPeticion(BaseModel):
 class CompraPeticion(BaseModel):
     slug: str
     nombre_empresa: str
-    tipo_entidad: str
+    # Default para el checkout liviano: si el form no pregunta, es una empresa.
+    tipo_entidad: str = "empresa"
     rubro_codigo: str
     pais: str = "CL"
     equipo_personas: str | None = Field(default=None, max_length=60)
