@@ -2,6 +2,25 @@
 
 Registro append-only de cambios del sitio y su API.
 
+## 2026-10-18 — Vitrina de planes: acceso a Personalizado + espaciado compacto
+
+La vitrina de planes de la página de producto ahora ofrece **Personalizado** junto a Básico/Premium, y la página queda más compacta verticalmente. El checkout conserva el invariante y el cero cálculo de precios.
+
+### Entregables
+- `SeccionPlanes`: bloque sobrio “Personalizado” debajo de las dos tarjetas, con el texto “¿Necesitas algo a medida? Arma tu plan: el Básico + solo los add-ons que necesites.” y CTA **“Armar mi plan”** → `/comprar?plan=personalizado`.
+- `PaginaProducto`: hero y sección de planes con menos padding/margen (`py-12/14/16`, `mt-10/5/6`) para acortar la separación entre bloques, manteniendo aire en móvil.
+- `/comprar`: se confirmó que el handoff `?plan=personalizado` ya abre el paso “Tu plan” con Personalizado seleccionado y la sección de add-ons visible; `seleccion()` usa `plan_codigo=None` + addons (la misma tupla para `/simular` y el webhook).
+- Sin cambios en Calenzia; sin cálculo de precios en el front.
+
+### Gate
+| Check | Resultado |
+|---|---|
+| `npm run build` (tsc + vite) | OK (`index-CmjNPdIQ.js`) |
+
+### Decisiones tácticas
+- Bloque full-width sobrio (no una tercera tarjeta) para no romper la simetría de las dos tarjetas.
+- El CTA solo navega al checkout; el configurador (personas, add-ons, periodicidad y total) sigue viviendo en `/comprar`.
+
 ## 2026-10-18 — Páginas de producto + modal de portada (reestructura)
 
 Los planes dejan de ser una sección suelta y viven dentro de la página propia de cada producto (`/:slug`, ej. `/calenzia`). La portada muestra el catálogo con “Ver más”; la página del producto explica el producto, muestra los planes solo si `muestra_planes`, y ofrece “Ver demo” (si `demo_url`) y un FAB “Comprar” solo para productos con planes y activos. Se retira la sección seedada `planes` y se agrega un modal de portada configurable desde Ajustes (apagado por defecto).

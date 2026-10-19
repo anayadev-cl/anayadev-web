@@ -117,10 +117,10 @@ export function PaginaProducto() {
       <Cabecera />
 
       <main>
-        <section className="relative py-16 sm:py-20">
+        <section className="relative py-12 sm:py-16">
           <div className="mx-auto max-w-6xl px-4 sm:px-6">
             <div
-              className={`grid items-center gap-10 ${
+              className={`grid items-center gap-8 ${
                 producto.imagen_url ? 'lg:grid-cols-[1.15fr_0.85fr]' : ''
               }`}
             >

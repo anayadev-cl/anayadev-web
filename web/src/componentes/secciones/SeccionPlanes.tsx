@@ -172,7 +172,7 @@ export function SeccionPlanes({ seccion }: SeccionPlanesProps) {
   const sinPlanes = catalogo !== null && !basico && !premium
 
   return (
-    <section id={seccion.slug ?? undefined} className="relative py-24">
+    <section id={seccion.slug ?? undefined} className="relative py-14 sm:py-16">
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
         <div className="mx-auto max-w-2xl text-center">
           <h2 className="text-3xl font-bold tracking-tight text-blanco sm:text-4xl">
@@ -186,7 +186,7 @@ export function SeccionPlanes({ seccion }: SeccionPlanesProps) {
         </div>
 
         {error || sinPlanes ? (
-          <div className="tarjeta-vidrio mx-auto mt-12 max-w-xl rounded-2xl p-6 text-center">
+          <div className="tarjeta-vidrio mx-auto mt-10 max-w-xl rounded-2xl p-6 text-center">
             <p className="text-sm leading-relaxed text-bruma">
               No pudimos cargar los planes ahora. Puedes verlos y comprar en el
               checkout.
@@ -200,7 +200,7 @@ export function SeccionPlanes({ seccion }: SeccionPlanesProps) {
             </a>
           </div>
         ) : !catalogo ? (
-          <div className="mx-auto mt-12 grid max-w-4xl grid-cols-1 gap-6 md:grid-cols-2">
+          <div className="mx-auto mt-10 grid max-w-4xl grid-cols-1 gap-6 md:grid-cols-2">
             {[0, 1].map((i) => (
               <div
                 key={i}
@@ -220,7 +220,7 @@ export function SeccionPlanes({ seccion }: SeccionPlanesProps) {
           </div>
         ) : (
           <>
-            <div className="mx-auto mt-12 grid max-w-4xl grid-cols-1 gap-6 md:grid-cols-2">
+            <div className="mx-auto mt-10 grid max-w-4xl grid-cols-1 gap-6 md:grid-cols-2">
               {basico && (
                 <TarjetaPlan
                   plan={basico}
@@ -238,7 +238,25 @@ export function SeccionPlanes({ seccion }: SeccionPlanesProps) {
                 />
               )}
             </div>
-            <p className="mt-8 text-center text-xs text-bruma/60">
+            <div className="mx-auto mt-5 max-w-4xl">
+              <div className="tarjeta-vidrio flex flex-col gap-4 rounded-2xl p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+                <div className="max-w-2xl">
+                  <p className="text-sm font-semibold text-blanco">Personalizado</p>
+                  <p className="mt-1 text-sm leading-relaxed text-bruma">
+                    ¿Necesitas algo a medida? Arma tu plan: el Básico + solo los
+                    add-ons que necesites.
+                  </p>
+                </div>
+                <a
+                  href="/comprar?plan=personalizado"
+                  className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full border border-cian/40 bg-cian/5 px-5 py-2.5 text-sm font-semibold text-cian transition-colors hover:border-cian/60 hover:bg-cian/10"
+                >
+                  Armar mi plan
+                  <span aria-hidden>→</span>
+                </a>
+              </div>
+            </div>
+            <p className="mt-6 text-center text-xs text-bruma/60">
               Precios mensuales por persona.
               {maxDescuento > 0
                 ? ` Hasta −${maxDescuento}% según periodicidad.`
