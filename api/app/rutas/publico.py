@@ -786,8 +786,14 @@ def crear_compra(cuerpo: CompraPeticion, sesion: Session = Depends(get_sesion)):
             raise HTTPException(
                 502, "No pudimos calcular tu plan. Intenta más tarde."
             )
-        total_plan = int(simulacion.get("total") or 0)
+        total_mensual = int(simulacion.get("total") or 0)
+        meses = max(int(simulacion.get("meses") or 1), 1)
+        # El checkout cobra el período completo por adelantado (N meses).
+        total_plan = int(simulacion.get("total_periodo") or total_mensual)
         total_monto_plan = catalogo_paises.formatear_monto(total_plan, pais_datos)
+        total_mensual_monto = catalogo_paises.formatear_monto(
+            total_mensual, pais_datos
+        )
         plan_nombre = next(
             (
                 p.get("nombre")
@@ -816,6 +822,9 @@ def crear_compra(cuerpo: CompraPeticion, sesion: Session = Depends(get_sesion)):
                 "id_fiscal": id_fiscal,
                 "total_minor": total_plan,
                 "total_monto": total_monto_plan,
+                "total_mensual_minor": total_mensual,
+                "total_mensual_monto": total_mensual_monto,
+                "meses": meses,
                 "timezone": "America/Santiago",
                 "equipo_personas": (cuerpo.equipo_personas or "").strip() or None,
                 "necesidades": [],

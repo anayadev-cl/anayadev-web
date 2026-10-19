@@ -318,7 +318,12 @@ export interface PlanSimular {
   descuento_pct: number
   precio_persona_base: number
   precio_persona: number
+  /** Total mensual: precio_persona × nro_trabajadores. */
   total: number
+  /** Meses del período de la periodicidad (1 = mensual). */
+  meses?: number
+  /** Cobro único del período: total mensual × meses. */
+  total_periodo?: number
   nro_trabajadores: number
   cupo: Record<string, number>
   cupo_persona: Record<string, number>
@@ -343,8 +348,13 @@ export interface Compra {
     etiqueta_id_fiscal?: string
     prefijo_telefono?: string
     id_fiscal?: string | null
+    /** Cobro del período (un solo pago por adelantado). */
     total_minor?: number | null
     total_monto?: string | null
+    /** Referencia mensual del período (para mostrar "$Y/mes"). */
+    total_mensual_minor?: number | null
+    total_mensual_monto?: string | null
+    meses?: number | null
     timezone: string
     equipo_personas: string | null
     necesidades: string[]

@@ -41,6 +41,23 @@ function etiquetaEquipo(nroTrabajadores: number): string {
   return `${nroTrabajadores} ${nroTrabajadores === 1 ? 'persona' : 'personas'}`
 }
 
+function periodoDe(sim: PlanSimular): {
+  meses: number
+  totalPeriodo: number
+  totalMensual: number
+} {
+  const meses = sim.meses ?? 1
+  return {
+    meses,
+    totalPeriodo: sim.total_periodo ?? sim.total,
+    totalMensual: sim.total,
+  }
+}
+
+function textoMeses(meses: number): string {
+  return meses === 1 ? '1 mes' : `${meses} meses`
+}
+
 function tramoPara(
   nroTrabajadores: number,
   tramos: PlanTramoPublico[],
@@ -415,6 +432,19 @@ export function PaginaCompra() {
               <span className="text-cian">agenda.anayadev.cl/{resultado.datos.slug}</span>
             </p>
           )}
+          {!fallo && resultado.datos.total_monto && (
+            <p className="mt-2 text-sm text-bruma/70">
+              Pago del período
+              {resultado.datos.meses && resultado.datos.meses > 1
+                ? ` (${textoMeses(resultado.datos.meses)})`
+                : ''}
+              :{' '}
+              <span className="text-blanco">{resultado.datos.total_monto}</span>
+              {resultado.datos.total_mensual_monto
+                ? ` · equivale a ${resultado.datos.total_mensual_monto} / mes`
+                : ''}
+            </p>
+          )}
           {!fallo && resultado.datos.calenzia?.token && (
             <p className="mt-2 text-sm text-bruma/70">
               Guarda el enlace para seguir tu solicitud:{' '}
@@ -455,6 +485,10 @@ export function PaginaCompra() {
       .join(', ') || '—'
   const funcionesBase = (planes?.funciones ?? []).filter((f) => f.tipo === 'base')
   const funcionesAddon = (planes?.funciones ?? []).filter((f) => f.tipo === 'addon')
+  const personalizadoPeriodo = simulaciones.personalizado
+    ? periodoDe(simulaciones.personalizado)
+    : null
+  const periodoActual = simulacionActual ? periodoDe(simulacionActual) : null
 
   return (
     <div className="relative min-h-screen">
@@ -599,13 +633,15 @@ export function PaginaCompra() {
                     ))}
                   </div>
                   <p className="mt-1.5 text-xs text-bruma/60">
-                    El descuento aplica al precio mensual; Calenzia cobra mes a mes.
+                    El descuento ya está en el precio mensual. Pagas el período completo
+                    por adelantado, en un solo pago.
                   </p>
                 </div>
 
                 <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
                   {(planes?.planes ?? []).map((plan) => {
                     const sim = simulaciones[plan.codigo]
+                    const periodo = sim ? periodoDe(sim) : null
                     const activo = planSeleccion === plan.codigo
                     return (
                       <button
@@ -643,15 +679,15 @@ export function PaginaCompra() {
                             : 'Calculando…'}
                         </span>
                         <span className="mt-0.5 block text-sm font-bold text-blanco">
-                          {sim
-                            ? `Total ${formatearMonto(paisActual, sim.total)} / mes`
+                          {periodo
+                            ? `Pagas ${formatearMonto(paisActual, periodo.totalPeriodo)} por ${textoMeses(periodo.meses)}`
                             : '—'}
                         </span>
-                        {sim && (
+                        {sim && periodo && (
                           <span className="mt-1 block text-[11px] text-bruma/60">
+                            {formatearMonto(paisActual, periodo.totalMensual)} / mes ·{' '}
                             {formatearMonto(paisActual, sim.precio_persona)} ×{' '}
-                            {sim.nro_trabajadores} ={' '}
-                            {formatearMonto(paisActual, sim.total)} / mes
+                            {sim.nro_trabajadores}
                           </span>
                         )}
                       </button>
@@ -682,10 +718,15 @@ export function PaginaCompra() {
                       Base Básico + los add-ons que elijas.
                     </span>
                     <span className="mt-2 block text-sm font-bold text-blanco">
-                      {simulaciones.personalizado
-                        ? `Total ${formatearMonto(paisActual, simulaciones.personalizado.total)} / mes`
+                      {personalizadoPeriodo
+                        ? `Pagas ${formatearMonto(paisActual, personalizadoPeriodo.totalPeriodo)} por ${textoMeses(personalizadoPeriodo.meses)}`
                         : 'Calculando…'}
                     </span>
+                    {personalizadoPeriodo && (
+                      <span className="mt-0.5 block text-[11px] text-bruma/60">
+                        {formatearMonto(paisActual, personalizadoPeriodo.totalMensual)} / mes
+                      </span>
+                    )}
                   </button>
                 </div>
 
@@ -767,10 +808,11 @@ export function PaginaCompra() {
                 )}
 
                 <div className="rounded-2xl border border-cian/30 bg-cian/5 p-5">
-                  <div className="flex items-center justify-between gap-3">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                     <div>
                       <span className="block text-sm font-semibold text-bruma">
-                        Total {periodicidadActual ? `(${periodicidadActual.nombre})` : ''}
+                        Pago del período{' '}
+                        {periodicidadActual ? `(${periodicidadActual.nombre})` : ''}
                       </span>
                       <span className="block text-xs text-bruma/60">
                         para {equipoEtiqueta}
@@ -782,17 +824,22 @@ export function PaginaCompra() {
                           : ''}
                       </span>
                     </div>
-                    <span className="text-2xl font-bold texto-gradiente">
+                    <span className="text-right text-xl font-bold texto-gradiente sm:text-2xl">
                       {simulando
                         ? '…'
-                        : simulacionActual
-                          ? `${formatearMonto(paisActual, simulacionActual.total)} / mes`
+                        : periodoActual
+                          ? `Pagas ${formatearMonto(paisActual, periodoActual.totalPeriodo)} por ${textoMeses(periodoActual.meses)}`
                           : '—'}
                     </span>
                   </div>
-                  <p className="mt-2 text-xs text-bruma/60">
-                    Esto es lo que pagas al mes. El descuento por periodicidad ya está
-                    incluido en el precio mensual.
+                  <p className="mt-2 text-xs leading-relaxed text-bruma/60">
+                    Un solo pago por adelantado
+                    {periodoActual && periodoActual.meses > 1
+                      ? `: cubre ${textoMeses(periodoActual.meses)} de servicio, sin cobros mensuales durante ese período.`
+                      : '.'}{' '}
+                    {periodoActual
+                      ? `Equivale a ${formatearMonto(paisActual, periodoActual.totalMensual)} / mes; el descuento por periodicidad ya está incluido.`
+                      : ''}
                   </p>
                 </div>
               </div>
@@ -998,13 +1045,26 @@ export function PaginaCompra() {
                     </div>
                   ))}
                   <div className="flex justify-between gap-4 border-t border-blanco/8 pt-2.5">
-                    <dt className="text-bruma/70">Total mensual</dt>
+                    <dt className="text-bruma/70">Pago del período</dt>
                     <dd className="text-right font-semibold text-blanco">
-                      {simulacionActual
-                        ? `${formatearMonto(paisActual, simulacionActual.total)} / mes`
+                      {periodoActual
+                        ? `${formatearMonto(paisActual, periodoActual.totalPeriodo)} · ${textoMeses(periodoActual.meses)}`
                         : '—'}
                     </dd>
                   </div>
+                  <div className="flex justify-between gap-4">
+                    <dt className="text-bruma/70">Equivalente mensual</dt>
+                    <dd className="text-right text-blanco">
+                      {periodoActual
+                        ? `${formatearMonto(paisActual, periodoActual.totalMensual)} / mes`
+                        : '—'}
+                    </dd>
+                  </div>
+                  {periodoActual && periodoActual.meses > 1 && (
+                    <p className="pt-1 text-xs text-bruma/60">
+                      Un solo pago por adelantado; cubre {textoMeses(periodoActual.meses)}.
+                    </p>
+                  )}
                 </dl>
               </div>
             )}

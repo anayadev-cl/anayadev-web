@@ -182,6 +182,14 @@ def enviar_correo_compra(compra) -> bool:
     plan_nombre = datos.get("plan_nombre") or datos.get("plan_codigo") or "Personalizado"
     periodicidad = datos.get("periodicidad_codigo") or "—"
     addons_txt = ", ".join(datos.get("addons") or []) or "—"
+    meses = int(datos.get("meses") or 1)
+    total_mensual = datos.get("total_mensual_monto") or total
+    pago = (
+        f"Pago del período ({meses} {'mes' if meses == 1 else 'meses'}): {total}\n"
+        f"Equivalente mensual: {total_mensual}\n"
+        if es_plan
+        else f"Total mensual: {total}\n"
+    )
     seleccion = (
         f"Plan: {plan_nombre}\n"
         f"Periodicidad: {periodicidad}\n"
@@ -204,7 +212,7 @@ def enviar_correo_compra(compra) -> bool:
         f"Admin: {datos.get('admin_nombre', '')} ({datos.get('admin_correo', '')})\n"
         f"Teléfono: {datos.get('admin_telefono') or '-'}\n"
         f"{datos.get('etiqueta_id_fiscal', 'RUT')}: {datos.get('id_fiscal') or '-'}\n\n"
-        f"Total mensual: {total}\n\n"
+        f"{pago}\n"
         "Revisa el panel Compras del CMS para reenviarla a Calenzia o "
         "activarla manualmente.\n"
     )
@@ -226,6 +234,14 @@ def enviar_correo_cliente(compra) -> bool:
     plan_nombre = datos.get("plan_nombre") or datos.get("plan_codigo") or "Personalizado"
     periodicidad = datos.get("periodicidad_codigo") or "—"
     addons_txt = ", ".join(datos.get("addons") or []) or "—"
+    meses = int(datos.get("meses") or 1)
+    total_mensual = datos.get("total_mensual_monto") or total
+    pago = (
+        f"Pago del período ({meses} {'mes' if meses == 1 else 'meses'}) estimado: {total}\n"
+        f"Equivalente mensual: {total_mensual}\n"
+        if es_plan
+        else f"Total mensual estimado: {total}\n"
+    )
     seleccion = (
         f"Plan: {plan_nombre}\nPeriodicidad: {periodicidad}\n"
         f"Add-ons: {addons_txt}\n\n"
@@ -243,7 +259,7 @@ def enviar_correo_cliente(compra) -> bool:
         f"Rubro: {datos.get('rubro_nombre', '')}\n"
         f"Equipo: {datos.get('equipo_personas') or '-'}\n"
         f"{seleccion}"
-        f"Total mensual estimado: {total}\n\n"
+        f"{pago}\n"
         "Nuestro equipo revisará tu solicitud y te contactará a este correo "
         "para confirmar el paquete final, ajustar los límites a tu equipo y "
         "coordinar la activación y el pago. No pagas nada todavía.\n\n"
