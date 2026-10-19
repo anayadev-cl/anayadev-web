@@ -12,7 +12,7 @@ export function Navegacion({ secciones }: NavegacionProps) {
 
   const enlaces = secciones
     .filter((s) =>
-      s.slug && ['circuito', 'productos', 'planes', 'proceso', 'contacto'].includes(s.tipo),
+      s.slug && ['circuito', 'productos', 'proceso', 'contacto'].includes(s.tipo),
     )
     .map((s) => ({ slug: s.slug as string, titulo: s.titulo }))
 

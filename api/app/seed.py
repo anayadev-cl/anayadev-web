@@ -3,6 +3,7 @@
 Solo inserta lo que falta: si la tabla ya tiene datos, no toca nada.
 """
 
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from .bd import SesionLocal
@@ -35,6 +36,16 @@ AJUSTES_INICIALES = {
     "calenzia_api_url": "",
     "calenzia_paises_url": "",
     "calenzia_precios_url": "",
+    "modal_activo": "0",
+    "modal_producto_slug": "calenzia",
+    "modal_titulo": "Conoce Calenzia",
+    "modal_texto": (
+        "Agenda, cobra y fideliza a tus clientes con IA. "
+        "Descubre cómo Calenzia se adapta a tu negocio."
+    ),
+    "modal_cta_texto": "Ver Calenzia",
+    "modal_cta_url": "/calenzia",
+    "modal_version": "1",
 }
 
 SECCIONES_INICIALES = [
@@ -373,6 +384,8 @@ PRODUCTOS_INICIALES = [
         ],
         "imagen_url": "/calenzia1.png",
         "url": "https://agenda.anayadev.cl",
+        "muestra_planes": True,
+        "demo_url": None,
         "orden": 0,
     },
     {
@@ -391,6 +404,8 @@ PRODUCTOS_INICIALES = [
         ],
         "imagen_url": None,
         "url": None,
+        "muestra_planes": False,
+        "demo_url": None,
         "orden": 1,
     },
     {
@@ -410,6 +425,8 @@ PRODUCTOS_INICIALES = [
         ],
         "imagen_url": None,
         "url": None,
+        "muestra_planes": False,
+        "demo_url": None,
         "orden": 2,
     },
 ]
@@ -418,11 +435,14 @@ PRODUCTOS_INICIALES = [
 def sembrar() -> None:
     sesion: Session = SesionLocal()
     try:
+        columnas_nuevas = _asegurar_columnas_producto(sesion)
         _sembrar_usuario(sesion)
         _sembrar_ajustes(sesion)
         _sembrar_secciones(sesion)
-        _asegurar_seccion_planes(sesion)
+        _retirar_seccion_planes(sesion)
         _sembrar_productos(sesion)
+        if columnas_nuevas:
+            _backfill_productos(sesion)
         _sembrar_chatbot(sesion)
         _sembrar_checkout_modulos(sesion)
         _sembrar_checkout_rubros(sesion)
@@ -502,35 +522,50 @@ def _sembrar_secciones(sesion: Session) -> None:
         sesion.add(Seccion(**datos))
 
 
-def _asegurar_seccion_planes(sesion: Session) -> None:
-    """Inserta la sección de planes (oculta) después de Productos, una sola vez."""
-    sesion.flush()
-    if sesion.query(Seccion).filter(Seccion.slug == "planes").first() is not None:
-        return
-    productos = (
-        sesion.query(Seccion).filter(Seccion.slug == "productos").first()
-    )
-    orden = (productos.orden + 1) if productos is not None else 3
-    for seccion in (
-        sesion.query(Seccion).filter(Seccion.orden >= orden).all()
-    ):
-        seccion.orden += 1
-    sesion.add(
-        Seccion(
-            slug="planes",
-            tipo="planes",
-            titulo="Planes",
-            subtitulo=(
-                "Precios claros, sin sorpresas. Elige cómo empezar y crece "
-                "cuando tu negocio lo necesite."
-            ),
-            texto="",
-            imagen_url=None,
-            datos={},
-            orden=orden,
-            visible=False,
+def _asegurar_columnas_producto(sesion: Session) -> bool:
+    """Agrega las columnas nuevas de `productos` en SQLite (idempotente)."""
+    columnas = {
+        fila[1]
+        for fila in sesion.execute(text("PRAGMA table_info(productos)")).fetchall()
+    }
+    agrego_planes = False
+    if "muestra_planes" not in columnas:
+        sesion.execute(
+            text(
+                "ALTER TABLE productos ADD COLUMN muestra_planes "
+                "BOOLEAN NOT NULL DEFAULT 0"
+            )
         )
+        agrego_planes = True
+    if "demo_url" not in columnas:
+        sesion.execute(
+            text("ALTER TABLE productos ADD COLUMN demo_url VARCHAR(500)")
+        )
+    return agrego_planes
+
+
+def _backfill_productos(sesion: Session) -> None:
+    """Solo al crear la columna: Calenzia muestra planes; la demo queda vacía."""
+    calenzia = sesion.query(Producto).filter(Producto.slug == "calenzia").first()
+    if calenzia is not None:
+        calenzia.muestra_planes = True
+
+
+def _retirar_seccion_planes(sesion: Session) -> None:
+    """Borra la sección suelta de planes y compacta los órdenes."""
+    planes = (
+        sesion.query(Seccion)
+        .filter(Seccion.slug == "planes", Seccion.tipo == "planes")
+        .first()
     )
+    if planes is None:
+        return
+    orden = planes.orden
+    sesion.delete(planes)
+    for seccion in (
+        sesion.query(Seccion).filter(Seccion.orden > orden).all()
+    ):
+        seccion.orden -= 1
 
 
 def _sembrar_productos(sesion: Session) -> None:

@@ -38,6 +38,22 @@ from ..webhook import enviar_webhook_onboarding
 
 router = APIRouter()
 
+CLAVES_AJUSTES_PUBLICAS = frozenset(
+    {
+        "email_contacto",
+        "whatsapp",
+        "instagram",
+        "footer_eslogan",
+        "modal_activo",
+        "modal_producto_slug",
+        "modal_titulo",
+        "modal_texto",
+        "modal_cta_texto",
+        "modal_cta_url",
+        "modal_version",
+    }
+)
+
 EXTENSIONES_PERMITIDAS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".txt", ".csv"}
 
 
@@ -123,12 +139,18 @@ def contenido_publico(sesion: Session = Depends(get_sesion)):
                 "caracteristicas": p.caracteristicas or [],
                 "imagen_url": p.imagen_url,
                 "url": p.url,
+                "muestra_planes": bool(p.muestra_planes),
+                "demo_url": p.demo_url,
                 "orden": p.orden,
                 "visible": p.visible,
             }
             for p in productos
         ],
-        "ajustes": ajustes,
+        "ajustes": {
+            clave: valor
+            for clave, valor in ajustes.items()
+            if clave in CLAVES_AJUSTES_PUBLICAS
+        },
     }
 
 

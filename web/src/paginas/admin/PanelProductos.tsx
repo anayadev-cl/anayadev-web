@@ -10,6 +10,15 @@ const ESTADOS = [
   { valor: 'proximamente', etiqueta: 'Próximamente' },
 ]
 
+const SLUGS_RESERVADOS = [
+  'comprar',
+  'mi-solicitud',
+  'privacidad',
+  'terminos',
+  'eliminacion-datos',
+  'admin',
+]
+
 const VACIO: Omit<Producto, 'id'> = {
   slug: '',
   nombre: '',
@@ -19,6 +28,8 @@ const VACIO: Omit<Producto, 'id'> = {
   caracteristicas: [],
   imagen_url: null,
   url: null,
+  muestra_planes: false,
+  demo_url: null,
   orden: 0,
   visible: true,
 }
@@ -66,8 +77,22 @@ export function PanelProductos() {
     setAviso('')
     setError('')
     try {
+      const slug = formulario.slug.trim().toLowerCase()
+      if (!slug) {
+        setError('El slug es obligatorio')
+        return
+      }
+      if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
+        setError('El slug solo admite minúsculas, números y guiones intermedios')
+        return
+      }
+      if (SLUGS_RESERVADOS.includes(slug)) {
+        setError('Ese slug está reservado por una ruta del sitio')
+        return
+      }
       const cuerpo = {
         ...formulario,
+        slug,
         caracteristicas: caracteristicasTexto
           .split('\n')
           .map((l) => l.trim())
@@ -184,6 +209,10 @@ export function PanelProductos() {
                 value={formulario.slug}
                 onChange={(e) => setFormulario({ ...formulario, slug: e.target.value })}
               />
+              <span className="mt-1 block text-xs text-bruma/60">
+                Ruta /slug. No puede ser comprar, admin, mi-solicitud, privacidad,
+                terminos ni eliminacion-datos.
+              </span>
             </Campo>
             <Campo etiqueta="Estado">
               <select
@@ -288,6 +317,34 @@ export function PanelProductos() {
             />
           </Campo>
 
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Campo etiqueta="URL de demo (opcional)">
+              <input
+                className={entradaClase}
+                placeholder="https://…"
+                value={formulario.demo_url ?? ''}
+                onChange={(e) =>
+                  setFormulario({ ...formulario, demo_url: e.target.value || null })
+                }
+              />
+              <span className="mt-1 block text-xs text-bruma/60">
+                Si está vacía, la página del producto no muestra “Ver demo”.
+              </span>
+            </Campo>
+            <Campo etiqueta="Planes">
+              <div className="flex items-center gap-3 pt-2">
+                <Switch
+                  activo={formulario.muestra_planes}
+                  alCambiar={(valor) =>
+                    setFormulario({ ...formulario, muestra_planes: valor })
+                  }
+                  etiqueta="Mostrar planes (Calenzia)"
+                />
+                <span className="text-sm text-bruma">Mostrar planes y compra</span>
+              </div>
+            </Campo>
+          </div>
+
           <div className="flex items-center justify-between gap-3 border-t border-blanco/8 pt-4">
             <div className="flex items-center gap-3">
               <Switch
@@ -326,6 +383,18 @@ export function PanelProductos() {
                     <NombreConZia nombre={producto.nombre} />
                   </p>
                   <p className="truncate text-sm text-bruma">{producto.eslogan}</p>
+                  <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                    {producto.muestra_planes && (
+                      <span className="rounded-md border border-cian/25 bg-cian/5 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-cian">
+                        planes
+                      </span>
+                    )}
+                    {producto.demo_url && (
+                      <span className="rounded-md border border-turquesa/25 bg-turquesa/5 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-turquesa">
+                        demo
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <select
                   value={producto.estado}

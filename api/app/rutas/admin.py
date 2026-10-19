@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 from uuid import uuid4
 
@@ -140,6 +141,32 @@ def eliminar_seccion(
 # -------------------------------------------------------------------- productos
 
 
+SLUGS_RESERVADOS = frozenset(
+    {
+        "comprar",
+        "mi-solicitud",
+        "privacidad",
+        "terminos",
+        "eliminacion-datos",
+        "admin",
+    }
+)
+_SLUG_PRODUCTO_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+
+
+def _slug_producto(valor: str) -> str:
+    slug = valor.strip().lower()
+    if not slug:
+        raise HTTPException(422, "El slug es obligatorio")
+    if not _SLUG_PRODUCTO_RE.fullmatch(slug):
+        raise HTTPException(
+            422, "El slug solo admite minúsculas, números y guiones intermedios"
+        )
+    if slug in SLUGS_RESERVADOS:
+        raise HTTPException(422, "Ese slug está reservado por una ruta del sitio")
+    return slug
+
+
 @router.get("/productos", response_model=list[ProductoRespuesta])
 def listar_productos(
     sesion: Session = Depends(get_sesion), _: Usuario = Depends(admin_actual)
@@ -153,10 +180,12 @@ def crear_producto(
     sesion: Session = Depends(get_sesion),
     _: Usuario = Depends(admin_actual),
 ):
-    existente = sesion.query(Producto).filter(Producto.slug == cuerpo.slug).first()
+    datos = cuerpo.model_dump()
+    datos["slug"] = _slug_producto(cuerpo.slug)
+    existente = sesion.query(Producto).filter(Producto.slug == datos["slug"]).first()
     if existente:
         raise HTTPException(422, "Ya existe un producto con ese slug")
-    producto = Producto(**cuerpo.model_dump())
+    producto = Producto(**datos)
     sesion.add(producto)
     sesion.commit()
     sesion.refresh(producto)
@@ -173,13 +202,15 @@ def actualizar_producto(
     producto = sesion.get(Producto, producto_id)
     if producto is None:
         raise HTTPException(404, "Producto inexistente")
-    if cuerpo.slug != producto.slug:
+    datos = cuerpo.model_dump()
+    datos["slug"] = _slug_producto(cuerpo.slug)
+    if datos["slug"] != producto.slug:
         existente = (
-            sesion.query(Producto).filter(Producto.slug == cuerpo.slug).first()
+            sesion.query(Producto).filter(Producto.slug == datos["slug"]).first()
         )
         if existente:
             raise HTTPException(422, "Ya existe un producto con ese slug")
-    for campo, valor in cuerpo.model_dump().items():
+    for campo, valor in datos.items():
         setattr(producto, campo, valor)
     sesion.commit()
     sesion.refresh(producto)

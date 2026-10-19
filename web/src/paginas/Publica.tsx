@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Chatbot } from '../componentes/Chatbot'
 import { FondoCircuito } from '../componentes/FondoCircuito'
+import { ModalPromo } from '../componentes/ModalPromo'
 import { Navegacion } from '../componentes/Navegacion'
 import { PiePagina } from '../componentes/PiePagina'
 import { RenderizadorSecciones } from '../componentes/secciones/RenderizadorSecciones'
@@ -45,6 +46,7 @@ export function Publica() {
       </main>
       <PiePagina contenido={contenido} />
       <Chatbot />
+      <ModalPromo contenido={contenido} />
     </div>
   )
 }

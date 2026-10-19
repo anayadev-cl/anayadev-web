@@ -5,6 +5,7 @@ import { PaginaPrivacidad } from './paginas/legales/PaginaPrivacidad'
 import { PaginaTerminos } from './paginas/legales/PaginaTerminos'
 import { PaginaCompra } from './paginas/PaginaCompra'
 import { PaginaMiSolicitud } from './paginas/PaginaMiSolicitud'
+import { PaginaProducto } from './paginas/PaginaProducto'
 import { Publica } from './paginas/Publica'
 
 export function App() {
@@ -18,6 +19,7 @@ export function App() {
         <Route path="/terminos" element={<PaginaTerminos />} />
         <Route path="/eliminacion-datos" element={<PaginaEliminacionDatos />} />
         <Route path="/admin/*" element={<AdminApp />} />
+        <Route path="/:slug" element={<PaginaProducto />} />
         <Route path="*" element={<Publica />} />
       </Routes>
     </BrowserRouter>

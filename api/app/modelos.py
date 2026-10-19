@@ -42,6 +42,8 @@ class Producto(Base):
     caracteristicas = Column(JSON, default=list)
     imagen_url = Column(String(500), nullable=True)
     url = Column(String(500), nullable=True)
+    muestra_planes = Column(Boolean, default=False, nullable=False)
+    demo_url = Column(String(500), nullable=True)
     orden = Column(Integer, default=0)
     visible = Column(Boolean, default=True)
     creado_en = Column(DateTime, default=ahora_utc)

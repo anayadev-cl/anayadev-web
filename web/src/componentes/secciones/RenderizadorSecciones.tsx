@@ -2,7 +2,6 @@ import type { ContenidoPublico, Seccion } from '../../lib/tipos'
 import { SeccionCircuito } from './SeccionCircuito'
 import { SeccionContacto } from './SeccionContacto'
 import { SeccionHero } from './SeccionHero'
-import { SeccionPlanes } from './SeccionPlanes'
 import { SeccionProductos } from './SeccionProductos'
 import { SeccionProceso } from './SeccionProceso'
 import { SeccionTexto } from './SeccionTexto'
@@ -20,8 +19,6 @@ export function RenderizadorSecciones({ seccion, contenido }: RenderizadorSeccio
       return <SeccionCircuito seccion={seccion} />
     case 'productos':
       return <SeccionProductos seccion={seccion} productos={contenido.productos} />
-    case 'planes':
-      return <SeccionPlanes seccion={seccion} />
     case 'proceso':
       return <SeccionProceso seccion={seccion} />
     case 'contacto':

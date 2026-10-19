@@ -44,6 +44,8 @@ export interface Producto {
   caracteristicas: string[]
   imagen_url: string | null
   url: string | null
+  muestra_planes: boolean
+  demo_url: string | null
   orden: number
   visible: boolean
 }

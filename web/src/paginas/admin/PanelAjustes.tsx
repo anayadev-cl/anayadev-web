@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../lib/api'
-import { Aviso, Boton, Campo, entradaClase } from './ui'
+import type { Producto } from '../../lib/tipos'
+import { Aviso, Boton, Campo, Switch, entradaClase } from './ui'
 
 const CLAVES_CONOCIDAS = [
   { clave: 'email_contacto', etiqueta: 'Correo de contacto' },
@@ -30,8 +31,19 @@ const CLAVES_CONOCIDAS = [
   },
 ]
 
+const CLAVES_MODAL = [
+  'modal_activo',
+  'modal_producto_slug',
+  'modal_titulo',
+  'modal_texto',
+  'modal_cta_texto',
+  'modal_cta_url',
+  'modal_version',
+]
+
 export function PanelAjustes() {
   const [borrador, setBorrador] = useState<Record<string, string>>({})
+  const [productos, setProductos] = useState<Producto[]>([])
   const [nuevaClave, setNuevaClave] = useState('')
   const [nuevoValor, setNuevoValor] = useState('')
   const [error, setError] = useState('')
@@ -44,6 +56,13 @@ export function PanelAjustes() {
         setBorrador(datos)
       })
       .catch((e: Error) => setError(e.message))
+  }, [])
+
+  useEffect(() => {
+    api.productos
+      .listar()
+      .then((datos) => setProductos(datos.filter((p) => p.visible)))
+      .catch(() => setProductos([]))
   }, [])
 
   async function guardar() {
@@ -61,7 +80,9 @@ export function PanelAjustes() {
   }
 
   const clavesExtra = Object.keys(borrador).filter(
-    (clave) => !CLAVES_CONOCIDAS.some((c) => c.clave === clave),
+    (clave) =>
+      !CLAVES_CONOCIDAS.some((c) => c.clave === clave) &&
+      !CLAVES_MODAL.includes(clave),
   )
 
   return (
@@ -112,6 +133,100 @@ export function PanelAjustes() {
             </div>
           </Campo>
         ))}
+      </div>
+
+      <div className="tarjeta-vidrio space-y-4 rounded-2xl p-5">
+        <div>
+          <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-bruma/70">
+            Modal de portada
+          </h2>
+          <p className="mt-1 text-xs text-bruma/60">
+            Se muestra una vez por visitante. Sube la versión para volver a
+            mostrarlo a quienes ya lo cerraron.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <Switch
+            activo={(borrador.modal_activo ?? '0') === '1'}
+            alCambiar={(valor) =>
+              setBorrador({ ...borrador, modal_activo: valor ? '1' : '0' })
+            }
+            etiqueta="Mostrar modal en la portada"
+          />
+          <span className="text-sm text-bruma">
+            {(borrador.modal_activo ?? '0') === '1' ? 'Activo' : 'Apagado'}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Campo etiqueta="Producto objetivo">
+            <select
+              className={entradaClase}
+              value={borrador.modal_producto_slug ?? ''}
+              onChange={(e) =>
+                setBorrador({ ...borrador, modal_producto_slug: e.target.value })
+              }
+            >
+              <option value="">— Sin producto —</option>
+              {productos.map((producto) => (
+                <option key={producto.slug} value={producto.slug}>
+                  {producto.nombre}
+                </option>
+              ))}
+            </select>
+          </Campo>
+          <Campo etiqueta="Versión (para volver a mostrarlo)">
+            <input
+              type="number"
+              min={1}
+              className={entradaClase}
+              value={borrador.modal_version ?? '1'}
+              onChange={(e) =>
+                setBorrador({ ...borrador, modal_version: e.target.value })
+              }
+            />
+          </Campo>
+          <Campo etiqueta="Título">
+            <input
+              className={entradaClase}
+              value={borrador.modal_titulo ?? ''}
+              onChange={(e) =>
+                setBorrador({ ...borrador, modal_titulo: e.target.value })
+              }
+            />
+          </Campo>
+          <Campo etiqueta="Texto del CTA">
+            <input
+              className={entradaClase}
+              value={borrador.modal_cta_texto ?? ''}
+              onChange={(e) =>
+                setBorrador({ ...borrador, modal_cta_texto: e.target.value })
+              }
+            />
+          </Campo>
+          <Campo etiqueta="URL del CTA">
+            <input
+              className={entradaClase}
+              placeholder="/calenzia o /comprar"
+              value={borrador.modal_cta_url ?? ''}
+              onChange={(e) =>
+                setBorrador({ ...borrador, modal_cta_url: e.target.value })
+              }
+            />
+          </Campo>
+          <div className="sm:col-span-2">
+            <Campo etiqueta="Texto">
+              <textarea
+                className={`${entradaClase} min-h-20 resize-y`}
+                value={borrador.modal_texto ?? ''}
+                onChange={(e) =>
+                  setBorrador({ ...borrador, modal_texto: e.target.value })
+                }
+              />
+            </Campo>
+          </div>
+        </div>
       </div>
 
       <div className="tarjeta-vidrio rounded-2xl p-5">

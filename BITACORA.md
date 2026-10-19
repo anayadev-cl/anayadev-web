@@ -2,6 +2,41 @@
 
 Registro append-only de cambios del sitio y su API.
 
+## 2026-10-18 — Páginas de producto + modal de portada (reestructura)
+
+Los planes dejan de ser una sección suelta y viven dentro de la página propia de cada producto (`/:slug`, ej. `/calenzia`). La portada muestra el catálogo con “Ver más”; la página del producto explica el producto, muestra los planes solo si `muestra_planes`, y ofrece “Ver demo” (si `demo_url`) y un FAB “Comprar” solo para productos con planes y activos. Se retira la sección seedada `planes` y se agrega un modal de portada configurable desde Ajustes (apagado por defecto).
+
+### Entregables
+- `Producto` += `muestra_planes` (bool) y `demo_url` (nullable); migración SQLite idempotente en `seed.py` (ALTER si faltan) + backfill SOLO `muestra_planes=True` para `calenzia` (sin demo). CRUD/switch/input en `PanelProductos`; badges en la lista.
+- `SLUGS_RESERVADOS` validado en backend y avisado en el admin; regex de slug.
+- `PaginaProducto.tsx` (`/:slug`) con hero, características, “Ver demo”, planes (reusa `SeccionPlanes`), FAB “Comprar” abajo a la izquierda y Chatbot conservado abajo a la derecha; `PiePagina`.
+- `SeccionProductos`: “Ver más” primario a `/:slug`; “Abrir app ↗” terciario solo para activos con `url`. Sin “Comprar” en la tarjeta.
+- `App.tsx`: ruta `/:slug` antes del catch-all; las rutas fijas siguen ganando.
+- Modal `ModalPromo` en la portada; Ajustes: `modal_activo`, `modal_producto_slug`, `modal_titulo`, `modal_texto`, `modal_cta_texto`, `modal_cta_url`, `modal_version`; edición en `PanelAjustes` (switch/select/textos); localStorage `anayadev:modal:<slug>:<version>`; CTA/overlay/Escape/“Ahora no” descartan.
+- Se retira `planes` del seed/renderer/admin/nav; `_retirar_seccion_planes` borra la fila y compacta órdenes. Se conserva `SeccionPlanes.tsx`.
+- Hardening: `publico/contenido` filtra `ajustes` a una allowlist (email, whatsapp, instagram, footer, modal_*); deja de exponer `webhook_onboarding_secreto` y las URLs de Calenzia.
+- Sin cambios en Calenzia.
+
+### Gate (local)
+| Check | Resultado |
+|---|---|
+| `npm run build` (tsc + vite) | OK (`index-CsalHeTV.js`) |
+| `api ruff check .` | All checks passed |
+| `api mypy app` | 0 issues (17 archivos) |
+| `api pytest` | 5 passed |
+| seed/migración SQLite nueva | 3 productos (Calenzia planes=True, demo=None), 5 secciones sin planes, modal off; idempotente |
+| seed/migración SQLite vieja sin columnas | ALTER + backfill Calenzia=True/demo=None; planes borrada y órdenes compactados; segundo seed no pisa un `muestra_planes=False` |
+| Admin API | login 200; CRUD producto 201/200/204; flags visibles en público; slug reservado 422; modal 200 y reflejado en público; apagado final |
+| Público | `ajustes` sin secretos; sin sección `planes` |
+
+### Decisiones tácticas
+- “Ver más” es el único CTA de la tarjeta; el comprar vive en la página del producto.
+- FAB “Comprar” abajo a la izquierda (el Chatbot está abajo a la derecha); solo `muestra_planes && estado='activo'`.
+- `demo_url` vacío por defecto: el botón “Ver demo” se oculta hasta que haya un demo real.
+- El modal queda apagado; la versión permite re-mostrarlo.
+- La sección `planes` seedada se borra y se compactan los órdenes; el componente se reusa en la página del producto.
+- La allowlist pública de ajustes elimina secretos del payload del landing.
+
 ## 2026-10-18 — Portada: sección de planes (vitrina + CTA)
 
 Nueva sección CMS `planes` para mostrar Básico/Premium en la portada sin entrar al checkout. Los precios, cupos y funciones salen del catálogo público de Calenzia (cero cálculo de precios en el front); el CTA lleva a `/comprar?plan=basico|premium`, donde vive el selector de personas/periodicidad/total. La sección se crea **oculta** por seed idempotente, después de Productos, para que Elie la active y ajuste título/subtítulo/orden desde `/admin`.

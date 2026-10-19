@@ -33,6 +33,8 @@ class ProductoCrear(BaseModel):
     caracteristicas: list[str] = Field(default_factory=list)
     imagen_url: str | None = None
     url: str | None = None
+    muestra_planes: bool = False
+    demo_url: str | None = None
     orden: int = 0
     visible: bool = True
 
