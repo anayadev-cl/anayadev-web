@@ -3,7 +3,7 @@ import { api } from '../../lib/api'
 import type { Seccion } from '../../lib/tipos'
 import { Aviso, Boton, Campo, Switch, entradaClase } from './ui'
 
-const TIPOS = ['hero', 'circuito', 'productos', 'proceso', 'contacto', 'texto']
+const TIPOS = ['hero', 'circuito', 'productos', 'planes', 'proceso', 'contacto', 'texto']
 
 const VACIA: Omit<Seccion, 'id'> = {
   slug: null,
@@ -306,24 +306,35 @@ export function PanelSecciones() {
             />
           </Campo>
 
-          <Campo etiqueta="Texto (para secciones de tipo texto)">
-            <textarea
-              className={`${entradaClase} min-h-28 resize-y`}
-              value={formulario.texto}
-              onChange={(e) => setFormulario({ ...formulario, texto: e.target.value })}
-            />
-          </Campo>
+          {formulario.tipo === 'planes' && (
+            <p className="rounded-lg border border-cian/20 bg-cian/5 px-4 py-3 text-xs leading-relaxed text-bruma">
+              Las tarjetas, precios, cupos y add-ons se leen de Calenzia. Aquí
+              editas el título, el subtítulo, la visibilidad y el orden.
+            </p>
+          )}
 
-          <Campo etiqueta="Imagen (URL o /media/…)">
-            <input
-              className={entradaClase}
-              placeholder="/media/abc123.png o https://…"
-              value={formulario.imagen_url ?? ''}
-              onChange={(e) =>
-                setFormulario({ ...formulario, imagen_url: e.target.value || null })
-              }
-            />
-          </Campo>
+          {formulario.tipo !== 'planes' && (
+            <Campo etiqueta="Texto (para secciones de tipo texto)">
+              <textarea
+                className={`${entradaClase} min-h-28 resize-y`}
+                value={formulario.texto}
+                onChange={(e) => setFormulario({ ...formulario, texto: e.target.value })}
+              />
+            </Campo>
+          )}
+
+          {formulario.tipo !== 'planes' && (
+            <Campo etiqueta="Imagen (URL o /media/…)">
+              <input
+                className={entradaClase}
+                placeholder="/media/abc123.png o https://…"
+                value={formulario.imagen_url ?? ''}
+                onChange={(e) =>
+                  setFormulario({ ...formulario, imagen_url: e.target.value || null })
+                }
+              />
+            </Campo>
+          )}
 
           {formulario.tipo === 'hero' && (
             <>

@@ -421,6 +421,7 @@ def sembrar() -> None:
         _sembrar_usuario(sesion)
         _sembrar_ajustes(sesion)
         _sembrar_secciones(sesion)
+        _asegurar_seccion_planes(sesion)
         _sembrar_productos(sesion)
         _sembrar_chatbot(sesion)
         _sembrar_checkout_modulos(sesion)
@@ -499,6 +500,37 @@ def _sembrar_secciones(sesion: Session) -> None:
         return
     for datos in SECCIONES_INICIALES:
         sesion.add(Seccion(**datos))
+
+
+def _asegurar_seccion_planes(sesion: Session) -> None:
+    """Inserta la sección de planes (oculta) después de Productos, una sola vez."""
+    sesion.flush()
+    if sesion.query(Seccion).filter(Seccion.slug == "planes").first() is not None:
+        return
+    productos = (
+        sesion.query(Seccion).filter(Seccion.slug == "productos").first()
+    )
+    orden = (productos.orden + 1) if productos is not None else 3
+    for seccion in (
+        sesion.query(Seccion).filter(Seccion.orden >= orden).all()
+    ):
+        seccion.orden += 1
+    sesion.add(
+        Seccion(
+            slug="planes",
+            tipo="planes",
+            titulo="Planes",
+            subtitulo=(
+                "Precios claros, sin sorpresas. Elige cómo empezar y crece "
+                "cuando tu negocio lo necesite."
+            ),
+            texto="",
+            imagen_url=None,
+            datos={},
+            orden=orden,
+            visible=False,
+        )
+    )
 
 
 def _sembrar_productos(sesion: Session) -> None:
