@@ -30,59 +30,12 @@ const PAIS_FIJO = 'CL'
 const TEXTO_PERSONALIZADO =
   'Todo lo de abajo ya viene incluido. Suma solo lo que necesites y verás el total al instante.'
 
-type CategoriaRubro = 'belleza' | 'salud' | 'spa' | 'dental' | 'servicios' | 'otros'
-
-type RubroOpcion = {
-  id: string
-  nombre: string
-  categoria: CategoriaRubro
+type Rubro = {
   codigo: string
+  nombre: string
 }
 
-// Calenzia ya tiene un catálogo canónico (estetica, odontologia, spa,
-// terapia_ocupacional). La landing NO inventa códigos: usa esos códigos y
-// presenta la lista amplia de negocios con citas como etiquetas. Si mañana
-// Calenzia agrega un código específico, el mapa lo usa en cuanto aparece.
-const RUBROS_BASE: Omit<RubroOpcion, 'codigo'>[] = [
-  { id: 'peluqueria', nombre: 'Peluquería', categoria: 'belleza' },
-  { id: 'barberia', nombre: 'Barbería', categoria: 'belleza' },
-  { id: 'salon-belleza', nombre: 'Salón de belleza', categoria: 'belleza' },
-  { id: 'unas', nombre: 'Manicure y pedicure (uñas)', categoria: 'belleza' },
-  { id: 'depilacion', nombre: 'Depilación', categoria: 'belleza' },
-  { id: 'cosmetologia', nombre: 'Cosmetología / estética facial', categoria: 'belleza' },
-  { id: 'spa-masajes', nombre: 'Spa y masajes', categoria: 'spa' },
-  { id: 'tatuajes', nombre: 'Tatuajes y piercing', categoria: 'belleza' },
-  { id: 'maquillaje', nombre: 'Maquillaje y peinado', categoria: 'belleza' },
-  { id: 'podologia', nombre: 'Podología', categoria: 'salud' },
-  { id: 'consulta-medica', nombre: 'Consulta médica', categoria: 'salud' },
-  { id: 'odontologia', nombre: 'Odontología', categoria: 'dental' },
-  { id: 'kinesiologia', nombre: 'Kinesiología', categoria: 'salud' },
-  { id: 'nutricion', nombre: 'Nutrición', categoria: 'salud' },
-  { id: 'psicologia', nombre: 'Psicología', categoria: 'salud' },
-  { id: 'fonoaudiologia', nombre: 'Fonoaudiología', categoria: 'salud' },
-  { id: 'terapia-ocupacional', nombre: 'Terapia ocupacional', categoria: 'salud' },
-  { id: 'matrona', nombre: 'Matrona', categoria: 'salud' },
-  { id: 'veterinaria', nombre: 'Veterinaria', categoria: 'salud' },
-  { id: 'peluqueria-canina', nombre: 'Peluquería canina', categoria: 'salud' },
-  { id: 'entrenamiento', nombre: 'Entrenamiento personal', categoria: 'spa' },
-  { id: 'yoga-pilates', nombre: 'Yoga / Pilates', categoria: 'spa' },
-  { id: 'clases', nombre: 'Clases particulares / tutorías', categoria: 'servicios' },
-  { id: 'fotografia', nombre: 'Fotografía', categoria: 'servicios' },
-  { id: 'asesoria', nombre: 'Asesoría / consultoría', categoria: 'servicios' },
-  { id: 'taller', nombre: 'Taller automotriz (con cita)', categoria: 'servicios' },
-  { id: 'otro', nombre: 'Otro / especificar', categoria: 'otros' },
-]
-
-const CODIGOS_POR_CATEGORIA: Record<CategoriaRubro, string[]> = {
-  belleza: ['estetica', 'belleza'],
-  salud: ['terapia_ocupacional', 'terapias'],
-  spa: ['spa', 'terapias'],
-  dental: ['odontologia', 'terapias'],
-  servicios: ['servicios', 'terapia_ocupacional', 'estetica'],
-  otros: ['otros', 'terapia_ocupacional', 'servicios', 'estetica'],
-}
-
-const RUBRO_OTRO_ID = 'otro'
+const RUBRO_OTRO_CODIGO = 'otros'
 const normalizarBusqueda = (texto: string) =>
   texto
     .normalize('NFD')
@@ -90,19 +43,12 @@ const normalizarBusqueda = (texto: string) =>
     .toLowerCase()
     .trim()
 
-function construirRubros(
-  catalogo: { codigo: string; nombre: string }[],
-): RubroOpcion[] {
-  const disponibles = new Set(catalogo.map((r) => r.codigo))
-  const fallback = catalogo[0]?.codigo ?? ''
-  return RUBROS_BASE.map((rubro) => ({
-    ...rubro,
-    codigo:
-      CODIGOS_POR_CATEGORIA[rubro.categoria].find((codigo) =>
-        disponibles.has(codigo),
-      ) ?? fallback,
-  }))
-}
+const ordenarRubros = (rubros: Rubro[]) =>
+  [...rubros].sort((a, b) => {
+    if (a.codigo === RUBRO_OTRO_CODIGO) return 1
+    if (b.codigo === RUBRO_OTRO_CODIGO) return -1
+    return a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' })
+  })
 
 function numeroTrabajadoresValido(texto: string): number | null {
   const valor = texto.trim()
@@ -171,7 +117,7 @@ function leerHandoff(): {
 export function PaginaCompra() {
   const handoff = useMemo(leerHandoff, [])
 
-  const [rubros, setRubros] = useState<RubroOpcion[]>([])
+  const [rubros, setRubros] = useState<Rubro[]>([])
   const [paises, setPaises] = useState<Pais[]>([])
   const [planes, setPlanes] = useState<PlanCatalogoPublico | null>(null)
   const [cargando, setCargando] = useState(true)
@@ -181,7 +127,7 @@ export function PaginaCompra() {
   const [slug, setSlug] = useState('')
   const [slugManual, setSlugManual] = useState(false)
   const [estadoSlug, setEstadoSlug] = useState<'comprobando' | 'libre' | 'ocupado' | null>(null)
-  const [rubroId, setRubroId] = useState('')
+  const [rubroCodigo, setRubroCodigo] = useState('')
   const [rubroOtro, setRubroOtro] = useState('')
   const [rubroBusqueda, setRubroBusqueda] = useState('')
   const [rubroAbierto, setRubroAbierto] = useState(false)
@@ -210,10 +156,10 @@ export function PaginaCompra() {
     api
       .checkoutCatalogo()
       .then((datos) => {
-        const opciones = construirRubros(datos.rubros)
+        const opciones = ordenarRubros(datos.rubros ?? [])
         setRubros(opciones)
         setPaises(datos.paises ?? [])
-        if (opciones.length > 0) setRubroId(opciones[0].id)
+        if (opciones.length > 0) setRubroCodigo(opciones[0].codigo)
       })
       .catch(() => setError('No pudimos cargar el catálogo. Recarga la página.'))
       .finally(() => setCargando(false))
@@ -269,14 +215,16 @@ export function PaginaCompra() {
   const equipoEtiqueta = trabajadoresValidos === null ? '—' : etiquetaEquipo(trabajadoresValidos)
 
   const periodicidadActual = planes?.periodicidades.find((p) => p.codigo === periodicidad)
-  const rubroSeleccionado = rubros.find((rubro) => rubro.id === rubroId)
-  const etiquetaRubro =
-    rubroSeleccionado?.id === RUBRO_OTRO_ID
-      ? rubroOtro.trim() || rubroSeleccionado.nombre
-      : (rubroSeleccionado?.nombre ?? '')
+  const rubroSeleccionado = rubros.find((rubro) => rubro.codigo === rubroCodigo)
+  const esRubroOtro = rubroSeleccionado?.codigo === RUBRO_OTRO_CODIGO
+  const etiquetaRubro = esRubroOtro
+    ? rubroOtro.trim() || rubroSeleccionado.nombre
+    : (rubroSeleccionado?.nombre ?? '')
   const busquedaRubro = normalizarBusqueda(rubroBusqueda)
-  const rubrosFiltrados = rubros.filter((rubro) =>
-    normalizarBusqueda(rubro.nombre).includes(busquedaRubro),
+  const rubrosFiltrados = ordenarRubros(
+    rubros.filter((rubro) =>
+      normalizarBusqueda(rubro.nombre).includes(busquedaRubro),
+    ),
   )
 
   // La MISMA tupla se usa para simular y para enviar al webhook.
@@ -437,7 +385,7 @@ export function PaginaCompra() {
         estadoSlug !== 'ocupado' &&
         rubroSeleccionado !== undefined &&
         rubroSeleccionado.codigo.length > 0 &&
-        (rubroSeleccionado.id !== RUBRO_OTRO_ID || rubroOtro.trim().length > 0)
+        (!esRubroOtro || rubroOtro.trim().length > 0)
       )
     }
     if (paso === 2) {
@@ -488,9 +436,7 @@ export function PaginaCompra() {
         respuestas: {
           responde_fuera_de_horario: edicion === 'con_ia',
           rubro_etiqueta: etiquetaRubro,
-          ...(rubroSeleccionado.id === RUBRO_OTRO_ID
-            ? { rubro_otro: rubroOtro.trim() }
-            : {}),
+          ...(esRubroOtro ? { rubro_otro: rubroOtro.trim() } : {}),
         },
         plan_codigo: sel.plan_codigo,
         periodicidad_codigo: sel.periodicidad_codigo,
@@ -1018,20 +964,24 @@ export function PaginaCompra() {
                             </li>
                           ) : (
                             rubrosFiltrados.map((rubro) => (
-                              <li key={rubro.id} role="option" aria-selected={rubro.id === rubroId}>
+                              <li
+                                key={rubro.codigo}
+                                role="option"
+                                aria-selected={rubro.codigo === rubroCodigo}
+                              >
                                 <button
                                   type="button"
                                   className={`flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left text-sm transition-colors hover:bg-blanco/8 ${
-                                    rubro.id === rubroId ? 'text-cian' : 'text-blanco'
+                                    rubro.codigo === rubroCodigo ? 'text-cian' : 'text-blanco'
                                   }`}
                                   onClick={() => {
-                                    setRubroId(rubro.id)
+                                    setRubroCodigo(rubro.codigo)
                                     setRubroBusqueda('')
                                     setRubroAbierto(false)
                                   }}
                                 >
                                   <span>{rubro.nombre}</span>
-                                  {rubro.id === rubroId && (
+                                  {rubro.codigo === rubroCodigo && (
                                     <span className="text-xs text-bruma/60">Elegido</span>
                                   )}
                                 </button>
@@ -1043,7 +993,7 @@ export function PaginaCompra() {
                     )}
                   </div>
 
-                  {rubroSeleccionado?.id === RUBRO_OTRO_ID && (
+                  {esRubroOtro && (
                     <input
                       className={`${entrada} mt-2`}
                       value={rubroOtro}
